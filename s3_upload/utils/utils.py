@@ -52,3 +52,20 @@ def get_sequencing_file_list(dir, exclude_patterns) -> list:
         _description_
     """
     pass
+
+
+def check_upload_state(dir) -> str:
+    """
+    Checking upload state of run (i.e. complete, partial, not started)
+
+    Parameters
+    ----------
+    dir : _type_
+        _description_
+
+    Returns
+    -------
+    str
+        _description_
+    """
+    pass

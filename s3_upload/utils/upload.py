@@ -10,6 +10,13 @@ from concurrent.futures import (
 import boto3
 
 
+def authenticate():
+    """
+    Authenticate with AWS S3 with given credentials
+    """
+    pass
+
+
 def upload_single_file(local_file):
     """
     Uploads single file into S3 storage bucket
@@ -29,10 +36,10 @@ def single_core_threaded_upload(files, threads) -> list:
 
     Parameters
     ----------
-    files : _type_
-        _description_
-    threads : _type_
-        _description_
+    files : list
+        list of local files to upload
+    threads : int
+        maximum number of threaded process to open per core
 
     Returns
     -------
@@ -49,15 +56,16 @@ def call_by_core(files, cores, threads) -> list:
 
     Parameters
     ----------
-    files : _type_
-        _description_
-    cores : _type_
-        _description_
-    threads : _type_
-        _description_
+    files : list
+        list of local files to upload
+    cores : int
+        maximum number of logical CPU cores to split uploading across
+    threads : int
+        maximum number of threaded process to open per core
 
     Returns
     -------
     list
         _description_
     """
+    pass
