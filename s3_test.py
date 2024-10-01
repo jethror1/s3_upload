@@ -33,8 +33,10 @@ def single_core_threaded_upload(files, threads):
 
 def multiple_core_threaded_upload(files, cores, threads):
     """Split uploading of given files across n CPU cores"""
-    # MAX_CORES = 4
 
+    # split our list of files equally across cores
+    # TODO - think about splitting files by size between cores
+    # so we have a mix of large and small files split across cores
     files = [files[i : i + cores] for i in range(0, len(files), cores)]
 
     with ProcessPoolExecutor(max_workers=cores) as exe:
@@ -53,7 +55,6 @@ def upload(local_file):
     s3_client = boto3.client("s3")
 
     upload_file = local_file.lstrip(".").lstrip("/").replace("/genetics", "")
-    # print(f"Uploading {local_file} to {upload_file}")
 
     s3_client.upload_file(local_file, "jethro-s3-test-v2", upload_file)
 
