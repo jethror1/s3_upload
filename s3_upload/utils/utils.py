@@ -1,38 +1,54 @@
 """General utility functions"""
 
+from os import path
 
-def check_termination_files_exists(dir) -> bool:
+
+def check_termination_file_exists(run_dir) -> bool:
     """
-    _summary_
+    Check if the run has completed sequencing from the presence of
+    CopyComplete.txt (for NovaSeqs), or RTAComplete(.txt/.xml) for other
+    types of Illumina sequencers.
+
+    Adapted from: https://github.com/eastgenomics/dx-streaming-upload/blob/476b28af980ad62c5f2750cc0b6920b82a287b11/files/incremental_upload.py#L393
 
     Parameters
     ----------
-    dir : _type_
-        _description_
+    run_dir : str
+        path to run directory to check
 
     Returns
     -------
     bool
-        _description_
+        True if run is complete else False
     """
-    pass
+    if path.exists(path.join(run_dir, "CopyComplete.txt")):
+        # NovaSeq run that is complete
+        return True
+    elif path.exists(path.join(run_dir, "RTAComplete.txt")) or path.exists(
+        path.join(run_dir, "RTAComplete.xml")
+    ):
+        # other type of Illumina sequencer (e.g. MiSeq, NextSeq, HiSeq)
+        return True
+    else:
+        return False
 
 
-def check_is_sequencing_dir(dir) -> bool:
+def check_is_sequencing_run_dir(run_dir) -> bool:
     """
-    _summary_
+    Check if a given directory is a sequencing run from presence of
+    RunInfo.xml file
 
     Parameters
     ----------
-    dir : _type_
-        _description_
+    run_dir : str
+        path to directory to check
 
     Returns
     -------
     bool
-        _description_
+        True if directory is a sequencing run else False
     """
-    pass
+    return path.exists(path.join(run_dir, "RunInfo.xml"))
 
 
 def get_sequencing_file_list(dir, exclude_patterns) -> list:
