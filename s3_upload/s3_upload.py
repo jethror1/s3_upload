@@ -1,5 +1,14 @@
 import argparse
-from os import cpu_count
+from os import cpu_count, path
+from pathlib import Path
+
+
+from utils.upload import (
+    check_aws_access,
+    check_bucket_exists,
+    multi_core_upload,
+)
+from utils.utils import get_sequencing_file_list
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,7 +36,6 @@ def parse_args() -> argparse.Namespace:
 
     monitor_parser.add_argument(
         "--upload_config",
-        nargs=1,
         help="path config file for monitoring directories to upload",
     )
 
@@ -37,16 +45,17 @@ def parse_args() -> argparse.Namespace:
     )
 
     upload_parser.add_argument(
-        "--local_path", type=str, nargs=1, help="path to directory to upload"
+        "--local_path", help="path to directory to upload"
     )
     upload_parser.add_argument(
-        "--upload path",
+        "--bucket",
         type=str,
-        nargs=1,
-        help=(
-            "S3 bucket and path to upload to, should be in the format: "
-            "bucket://path/to/upload"
-        ),
+        help="S3 bucket to upload to",
+    )
+    upload_parser.add_argument(
+        "--remote_path",
+        default="/",
+        help="remote path in bucket to upload sequencing dir to",
     )
     upload_parser.add_argument(
         "--cores",
@@ -71,6 +80,21 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+
+    check_aws_access()
+    check_bucket_exists(args.bucket)
+
+    if args.mode == "upload":
+        files = get_sequencing_file_list(args.local_path)
+
+        multi_core_upload(
+            files=files,
+            bucket=args.bucket,
+            remote_path=args.remote_path,
+            cores=args.cores,
+            threads=args.threads,
+            parent_path=Path(args.local_path).parent,
+        )
 
     # check connectivity to AWS
     # check given S3 bucket exists
