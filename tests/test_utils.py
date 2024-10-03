@@ -54,7 +54,7 @@ class TestCheckTerminationFileExists(unittest.TestCase):
 
             os.remove(termination_file)
 
-    def incomplete_sequencing_run_returns_false(self):
+    def test_incomplete_sequencing_run_returns_false(self):
         """
         Check incomoplete runs correctly identified
         """
