@@ -77,7 +77,6 @@ def get_sequencing_file_list(seq_dir, exclude_patterns=None) -> list:
     list
         sorted list of files by their file size (ascending)
     """
-    # get list of all files sorted by file size in descending order
     files = sorted(
         [
             (x, stat(x).st_size)
@@ -85,7 +84,6 @@ def get_sequencing_file_list(seq_dir, exclude_patterns=None) -> list:
             if Path(x).is_file()
         ],
         key=lambda x: x[1],
-        reverse=True,
     )
 
     if exclude_patterns:
