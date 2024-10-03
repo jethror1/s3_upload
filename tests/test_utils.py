@@ -94,7 +94,7 @@ class TestGetSequencingFileList(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """
-        Set up a reasonable approximation of a sequencing dir strcuture with
+        Set up a reasonable approximation of a sequencing dir structure with
         files of differing sizes
         """
         cls.sequencing_dir_paths = [
@@ -143,6 +143,10 @@ class TestGetSequencingFileList(unittest.TestCase):
             "InterOp/C1.1/BasecallingMetricsOut.bin",
         ]
 
+        expected_file_list = [
+            os.path.join(self.test_run_dir, x) for x in expected_file_list
+        ]
+
         returned_file_list = utils.get_sequencing_file_list(
             seq_dir=self.test_run_dir
         )
@@ -163,7 +167,10 @@ class TestGetSequencingFileList(unittest.TestCase):
             # just test we get back the same files and ignore their ordering
             self.assertEqual(
                 sorted(returned_file_list),
-                sorted(x[0] for x in self.sequencing_files),
+                sorted(
+                    os.path.join(self.test_run_dir, x[0])
+                    for x in self.sequencing_files
+                ),
             )
 
         rmtree(empty_dir)
@@ -227,6 +234,10 @@ class TestGetSequencingFileList(unittest.TestCase):
                 returned_file_list = utils.get_sequencing_file_list(
                     seq_dir=self.test_run_dir, exclude_patterns=patterns
                 )
+
+                expected_files = [
+                    os.path.join(self.test_run_dir, x) for x in expected_files
+                ]
 
                 self.assertEqual(
                     sorted(returned_file_list), sorted(expected_files)
