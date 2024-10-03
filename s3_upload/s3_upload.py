@@ -87,13 +87,17 @@ def main() -> None:
     if args.mode == "upload":
         files = get_sequencing_file_list(args.local_path)
 
+        # pass through the parent of the specified directory to upload
+        # to ensure we upload into the actual run directory
+        parent_path = Path(args.local_path).parent
+
         multi_core_upload(
             files=files,
             bucket=args.bucket,
             remote_path=args.remote_path,
             cores=args.cores,
             threads=args.threads,
-            parent_path=Path(args.local_path).parent,
+            parent_path=paren_path,
         )
 
     # check connectivity to AWS
