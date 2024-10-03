@@ -97,7 +97,7 @@ def main() -> None:
             remote_path=args.remote_path,
             cores=args.cores,
             threads=args.threads,
-            parent_path=paren_path,
+            parent_path=parent_path,
         )
 
     # check connectivity to AWS
