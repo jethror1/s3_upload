@@ -1,6 +1,11 @@
 """General utility functions"""
 
-from os import path
+from glob import glob
+from itertools import zip_longest
+from os import path, stat
+from pathlib import Path
+import re
+from typing import List
 
 
 def check_termination_file_exists(run_dir) -> bool:
@@ -51,23 +56,77 @@ def check_is_sequencing_run_dir(run_dir) -> bool:
     return path.exists(path.join(run_dir, "RunInfo.xml"))
 
 
-def get_sequencing_file_list(dir, exclude_patterns) -> list:
+def get_sequencing_file_list(seq_dir, exclude_patterns=None) -> list:
     """
-    Recursively get list of files and their paths from the given directory
+    Recursively get list of files and their paths from the given
+    directory.
+
+    Files are returned in order of their file size without the given
+    root `seq_dir`.
 
     Parameters
     ----------
-    dir : _type_
-        _description_
-    exclude_patterns : _type_
-        _description_
+    seq_dir : str
+        path to search for files
+    exclude_patterns : list
+        list of regex patterns against which to exclude files, matching
+        against the full file path and file name
 
     Returns
     -------
     list
-        _description_
+        sorted list of files by their file size (descending)
     """
-    pass
+    files = sorted(
+        [
+            (x, stat(x).st_size)
+            for x in glob(f"{seq_dir}/**/*", recursive=True)
+            if Path(x).is_file()
+        ],
+        key=lambda x: x[1],
+        reverse=True,
+    )
+
+    if exclude_patterns:
+        files = [
+            x
+            for x in files
+            if not re.search(r"|".join(exclude_patterns), x[0])
+        ]
+
+    # remove the leading `seq_dir` path to just keep file paths relative
+    # to the run directory
+    files = [re.sub(re.escape(seq_dir), "", x[0]).lstrip("/") for x in files]
+
+    return files
+
+
+def split_file_list_by_cores(files, n) -> List[List[str]]:
+    """
+    Split given list of files sorted by file size into n approximately
+    equal total size and length.
+
+    This is a reasonably naive approach to give us n lists of files with
+    an equal length and approximately equal split of small to large files,
+    allowing us to more evenly split the total amount of data to upload
+    between each ProcessPool.
+
+    Parameters
+    ----------
+    files : list
+        sorted list of files
+    n : int
+        number of sub lists to split file list to
+
+    Returns
+    ------
+    list
+        list of lists of filenames
+    """
+    files = [files[i : i + n] for i in range(0, len(files), n)]
+    files = [[x for x in y if x] for y in zip_longest(*files)]
+
+    return files
 
 
 def check_upload_state(dir) -> str:
