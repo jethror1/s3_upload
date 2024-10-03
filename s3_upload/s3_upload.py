@@ -1,5 +1,5 @@
 import argparse
-from os import cpu_count, path
+from os import cpu_count, listdir, path
 from pathlib import Path
 
 
@@ -8,7 +8,7 @@ from utils.upload import (
     check_bucket_exists,
     multi_core_upload,
 )
-from utils.utils import get_sequencing_file_list
+from utils.utils import get_sequencing_file_list, split_file_list_by_cores
 
 
 def parse_args() -> argparse.Namespace:
@@ -81,11 +81,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    check_aws_access()
-    check_bucket_exists(args.bucket)
-
     if args.mode == "upload":
+        check_aws_access()
+        check_bucket_exists(args.bucket)
+
         files = get_sequencing_file_list(args.local_path)
+        files = split_file_list_by_cores(files=files, n=args.cores)
 
         # pass through the parent of the specified directory to upload
         # to ensure we upload into the actual run directory
@@ -99,17 +100,6 @@ def main() -> None:
             threads=args.threads,
             parent_path=parent_path,
         )
-
-    # check connectivity to AWS
-    # check given S3 bucket exists
-
-    # if running in monitor:
-    #   - read from upload log
-    #   - find directories to upload
-    #   -
-
-    # per dir to upload
-    #   -
 
 
 if __name__ == "__main__":
