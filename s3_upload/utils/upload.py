@@ -3,24 +3,57 @@
 from concurrent.futures import (
     ProcessPoolExecutor,
     ThreadPoolExecutor,
-    wait,
     as_completed,
 )
 from os import path
+import re
 
 import boto3
-from botocore.config import Config
 from boto3.s3.transfer import TransferConfig
+from botocore.config import Config
+from botocore import exceptions as s3_exceptions
 
 
-def authenticate():
+def check_aws_access():
     """
-    Authenticate with AWS S3 with given credentials
+    Check authentication with AWS S3 with stored credentials by checking
+    access to all buckets
+
+    Raises
+    ------
+    botocore.exceptions.ClientError
+        Raised when unable to connect to AWS
     """
-    pass
+    try:
+        session = boto3.Session()
+        list(session.resource("s3").buckets.all())
+    except s3_exceptions.ClientError as err:
+        raise RuntimeError(f"Error in connecting to AWS: {err}") from err
 
 
-def upload_single_file(s3_client, bucket, remote_path, local_file):
+def check_bucket_exists(bucket):
+    """
+    Check that the provided bucket exists and is accessible
+
+    Parameters
+    ----------
+    bucket : str
+        S3 bucket to check access
+
+    Raises
+    ------
+    botocore.exceptions.ClientError
+        Raised when bucket does not exist / not accessible
+    """
+    try:
+        boto3.client("s3").head_bucket(Bucket=bucket)
+    except s3_exceptions.ClientError as err:
+        raise err
+
+
+def upload_single_file(
+    s3_client, bucket, remote_path, local_file, parent_path
+):
     """
     Uploads single file into S3 storage bucket
 
@@ -43,8 +76,7 @@ def upload_single_file(s3_client, bucket, remote_path, local_file):
         ETag attribute of the uploaded file
     """
     # remove base directory
-    upload_file = local_file.lstrip(".").lstrip("/").replace("/genetics", "")
-    upload_file = path.join(remote_path, upload_file)
+    upload_file = re.sub(rf"^{parent_path}", "", local_file).lstrip("/")
 
     # set threshold for splitting across cores to 1GB and to not use
     # multiple threads for single file upload to allow us to control
@@ -55,10 +87,12 @@ def upload_single_file(s3_client, bucket, remote_path, local_file):
     # ensure we can access the remote file to log the object ID
     remote_object = s3_client.get_object(Bucket=bucket, Key=upload_file)
 
-    return local_file, remote_object.get("ETag")
+    return local_file, remote_object.get("ETag").strip('"')
 
 
-def single_core_threaded_upload(files, bucket, remote_path, threads) -> list:
+def multi_thread_upload(
+    files, bucket, remote_path, threads, parent_path
+) -> list:
     """
     Uploads the given set of `files` to S3 on a single CPU core using
     maximum of n threads
@@ -97,6 +131,7 @@ def single_core_threaded_upload(files, bucket, remote_path, threads) -> list:
                 bucket=bucket,
                 remote_path=remote_path,
                 local_file=item,
+                parent_path=parent_path,
             ): item
             for item in files
         }
@@ -114,15 +149,21 @@ def single_core_threaded_upload(files, bucket, remote_path, threads) -> list:
     return uploaded_files
 
 
-def call_by_core(files, cores, threads) -> list:
+def multi_core_upload(
+    files, bucket, remote_path, cores, threads, parent_path
+) -> list:
     """
-    Call the single_core_threaded_upload on `files` split across n
+    Call the multi_thread_upload on `files` split across n
     logical CPU cores
 
     Parameters
     ----------
     files : list
         list of local files to upload
+    bucket : str
+        S3 bucket to upload to
+    remote_path : str
+        parent directory in bucket to upload to
     cores : int
         maximum number of logical CPU cores to split uploading across
     threads : int
@@ -138,9 +179,12 @@ def call_by_core(files, cores, threads) -> list:
     with ProcessPoolExecutor(max_workers=cores) as exe:
         concurrent_jobs = {
             exe.submit(
-                single_core_threaded_upload,
+                multi_thread_upload,
                 files=sub_files,
+                bucket=bucket,
+                remote_path=remote_path,
                 threads=threads,
+                parent_path=parent_path,
             ): sub_files
             for sub_files in files
         }
