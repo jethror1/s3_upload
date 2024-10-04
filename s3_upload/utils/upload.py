@@ -44,15 +44,17 @@ def check_bucket_exists(bucket):
     bucket : str
         S3 bucket to check access
 
+    Returns
+    -------
+    dict
+        bucket metadata
+
     Raises
     ------
     botocore.exceptions.ClientError
         Raised when bucket does not exist / not accessible
     """
-    try:
-        boto3.client("s3").head_bucket(Bucket=bucket)
-    except s3_exceptions.ClientError as err:
-        raise err
+    return boto3.client("s3").head_bucket(Bucket=bucket)
 
 
 def upload_single_file(

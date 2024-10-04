@@ -35,3 +35,33 @@ class TestCheckAwsAccess(unittest.TestCase):
 
         with pytest.raises(RuntimeError, match=expected_error):
             upload.check_aws_access()
+
+
+@patch("s3_upload.utils.upload.boto3.client")
+class TestCheckBucketExists(unittest.TestCase):
+    def test_bucket_metadata_returned_when_bucket_exists(self, mock_client):
+        bucket_metadata = {
+            "ResponseMetadata": {
+                "RequestId": "8WQ3PBQNX",
+                "HostId": "1TvQsTG3ZQfoiuJrEFQBXBCMWFIX6DXA=",
+                "HTTPStatusCode": 200,
+                "HTTPHeaders": {
+                    "x-amz-id-2": "Hd4YGwX1TvQsTG3ZQfoiuJrEFQBXBCMWFIX6DXA=",
+                    "x-amz-request-id": "8WQ3PBQN3BX0G",
+                    "date": "Fri, 04 Oct 2024 13:37:34 GMT",
+                    "x-amz-bucket-region": "eu-west-2",
+                    "x-amz-access-point-alias": "false",
+                    "content-type": "application/xml",
+                    "server": "AmazonS3",
+                },
+                "RetryAttempts": 0,
+            },
+            "BucketRegion": "eu-west-2",
+            "AccessPointAlias": False,
+        }
+
+        mock_client.return_value.head_bucket.return_value = bucket_metadata
+
+        bucket_details = upload.check_bucket_exists("jethro-s3-test-v2")
+
+        self.assertEqual(bucket_details, bucket_metadata)
