@@ -19,14 +19,18 @@ def check_aws_access():
     Check authentication with AWS S3 with stored credentials by checking
     access to all buckets
 
+    Returns
+    -------
+    list
+        list of available S3 buckets
+
     Raises
     ------
     botocore.exceptions.ClientError
         Raised when unable to connect to AWS
     """
     try:
-        session = boto3.Session()
-        list(session.resource("s3").buckets.all())
+        return list(boto3.Session().resource("s3").buckets.all())
     except s3_exceptions.ClientError as err:
         raise RuntimeError(f"Error in connecting to AWS: {err}") from err
 
@@ -107,7 +111,9 @@ def multi_thread_upload(
         parent directory in bucket to upload to
     threads : int
         maximum number of threaded process to open per core
-
+    parent_path : str
+        path to parent of sequencing directory, will be removed from
+        the file path for uploading to not form part of the remote path
     Returns
     -------
     dict
@@ -168,6 +174,9 @@ def multi_core_upload(
         maximum number of logical CPU cores to split uploading across
     threads : int
         maximum number of threaded process to open per core
+    parent_path : str
+        path to parent of sequencing directory, will be removed from
+        the file path for uploading to not form part of the remote path
 
     Returns
     -------
