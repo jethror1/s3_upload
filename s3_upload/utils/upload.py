@@ -73,6 +73,9 @@ def upload_single_file(
         parent directory in bucket to upload to
     local_file : str
         file and path to upload
+    parent_path : str
+        path to parent of sequencing directory, will be removed from
+        the file path for uploading to not form part of the remote path
 
     Returns
     -------
@@ -81,14 +84,20 @@ def upload_single_file(
     str
         ETag attribute of the uploaded file
     """
-    # remove base directory
-    upload_file = re.sub(rf"^{parent_path}", "", local_file).lstrip("/")
+    # remove base directory and join to specified S3 location
+    upload_file = re.sub(rf"^{parent_path}", "", local_file)
+    upload_file = path.join(remote_path, upload_file).lstrip("/")
 
     # set threshold for splitting across cores to 1GB and to not use
     # multiple threads for single file upload to allow us to control
     # this better from the config
     config = TransferConfig(multipart_threshold=1024**3, use_threads=False)
-    s3_client.upload_file(local_file, bucket, upload_file, Config=config)
+    s3_client.upload_file(
+        file_name=local_file,
+        bucket=bucket,
+        object_name=upload_file,
+        Config=config,
+    )
 
     # ensure we can access the remote file to log the object ID
     remote_object = s3_client.get_object(Bucket=bucket, Key=upload_file)

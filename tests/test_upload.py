@@ -65,3 +65,100 @@ class TestCheckBucketExists(unittest.TestCase):
         bucket_details = upload.check_bucket_exists("jethro-s3-test-v2")
 
         self.assertEqual(bucket_details, bucket_metadata)
+
+
+@patch("s3_upload.utils.upload.boto3.session.Session.client")
+class TestUploadSingleFile(unittest.TestCase):
+    def test_upload_path_correctly_set_from_input_file_and_parent_path(
+        self, mock_client
+    ):
+        """
+        Path to upload in the bucket is set from the specified remote
+        path base directory, the path of the local file and the parent
+        path to remove. Test that different combinations of the above
+        results in the expected upload file path.
+        """
+
+        expected_inputs_and_upload_path = [
+            {
+                "remote_path": "/bucket_dir1/",
+                "local_file": "/path/to/monitored_dir/run1/Samplesheet.csv",
+                "parent_path": "/path/to/monitored_dir/",
+                "expected_upload_path": "bucket_dir1/run1/Samplesheet.csv",
+            },
+            {
+                "remote_path": "/bucket_dir_1/bucket_dir_2",
+                "local_file": "/path/to/monitored_dir/run1/Samplesheet.csv",
+                "parent_path": "/path/to/monitored_dir/",
+                "expected_upload_path": (
+                    "bucket_dir_1/bucket_dir_2/run1/Samplesheet.csv"
+                ),
+            },
+            {
+                "remote_path": "/",
+                "local_file": "/one_level_parent/run1/Samplesheet.csv",
+                "parent_path": "/one_level_parent/",
+                "expected_upload_path": "run1/Samplesheet.csv",
+            },
+        ]
+
+        for args in expected_inputs_and_upload_path:
+            with self.subTest():
+                upload.upload_single_file(
+                    s3_client=boto3.client(),
+                    bucket="test_bucket",
+                    remote_path=args["remote_path"],
+                    local_file=args["local_file"],
+                    parent_path=args["parent_path"],
+                )
+
+                self.assertEqual(
+                    mock_client.return_value.upload_file.call_args[1][
+                        "object_name"
+                    ],
+                    args["expected_upload_path"],
+                )
+
+    def test_local_file_name_and_object_id_returned(self, mock_client):
+        mock_client.return_value.get_object.return_value = {
+            "ETag": "1TvQsTG3ZQfoiuJrEFQBXBCMWFIX6DXA"
+        }
+
+        local_file, remote_id = upload.upload_single_file(
+            s3_client=boto3.client(),
+            bucket="test_bucket",
+            remote_path="/",
+            local_file="/path/to/monitored_dir/run1/Samplesheet.csv",
+            parent_path="/path/to/monitored_dir/",
+        )
+
+        self.assertEqual(
+            (local_file, remote_id),
+            (
+                "/path/to/monitored_dir/run1/Samplesheet.csv",
+                "1TvQsTG3ZQfoiuJrEFQBXBCMWFIX6DXA",
+            ),
+        )
+
+
+@patch("s3_upload.utils.upload.upload_single_file")
+@patch("s3_upload.utils.upload.boto3.session.Session.client")
+@patch("s3_upload.utils.upload.concurrent.futures.as_completed")
+class TestMultiThreadUpload(unittest.TestCase):
+    def test_upload_function_called_with_correct_args(
+        self, mock_thread, mock_client, mock_upload
+    ):
+
+        local_files = [
+            "/path/to/monitored_dir/run1/Samplesheet.csv",
+            "/path/to/monitored_dir/run1/RunInfo.xml",
+            "/path/to/monitored_dir/run1/CopyComplete.txt",
+        ]
+
+        uploaded_files = upload.multi_thread_upload(
+            files=local_files,
+            bucket="test_bucket",
+            remote_path="/",
+            threads=4,
+            parent_path="/path/to/monitored_dir/",
+        )
