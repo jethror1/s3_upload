@@ -75,4 +75,6 @@ def get_logger(
 
     logger.propagate = False
 
+    logger.info("Initialised log handle, beginning logging to %s", log_file)
+
     return logger
