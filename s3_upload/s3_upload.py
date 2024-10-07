@@ -71,8 +71,11 @@ def parse_args() -> argparse.Namespace:
         "--threads",
         nargs=1,
         type=int,
-        default=32,
-        help="number of threads to open per core to split uploading across",
+        default=8,
+        help=(
+            "number of threads to open per core to split uploading across "
+            "(default: 8)"
+        ),
     )
 
     return parser.parse_args()
