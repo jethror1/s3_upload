@@ -12,7 +12,7 @@ from utils.utils import (
     check_termination_file_exists,
     get_runs_to_upload,
     get_sequencing_file_list,
-    parse_config,
+    read_config,
     split_file_list_by_cores,
 )
 from utils.log import get_logger
@@ -242,7 +242,7 @@ def main() -> None:
     if args.mode == "upload":
         upload_single_run(args)
     else:
-        config = parse_config(config=args.config)
+        config = read_config(config=args.config)
         verify_config(config=config)
 
         monitor_directories_for_upload(config)

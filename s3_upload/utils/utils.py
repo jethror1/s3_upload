@@ -191,7 +191,7 @@ def check_upload_state(dir) -> str:
     pass
 
 
-def parse_config(config) -> dict:
+def read_config(config) -> dict:
     """
     Read in the JSON config file
 

@@ -286,6 +286,29 @@ class TestSplitFileListByCores(unittest.TestCase):
         self.assertEqual([], returned_split_list)
 
 
+class TestParseConfig(unittest.TestCase):
+    def test_contents_of_config_returned_as_dict(self):
+        config_contents = utils.read_config(
+            os.path.join(TEST_DATA_DIR, "test_config.json")
+        )
+
+        expected_contents = {
+            "max_cores": 4,
+            "max_threads": 8,
+            "log_level": "INFO",
+            "log_dir": "/var/log/s3_upload",
+            "monitor": [
+                {
+                    "monitored_directories": ["/absolute/path/to/sequencer_1"],
+                    "bucket": "bucket_A",
+                    "remote_path": "/",
+                },
+            ],
+        }
+
+        self.assertEqual(expected_contents, config_contents)
+
+
 class TestSizeofFmt(unittest.TestCase):
     def test_expected_value_and_suffix_returned(self):
         bytes_to_formatted = [
