@@ -46,7 +46,7 @@ def parse_args() -> argparse.Namespace:
     monitor_parser.add_argument(
         "--config",
         required=True,
-        help="path config file for monitoring directories to upload",
+        help="config file for monitoring directories to upload",
     )
 
     upload_parser = subparsers.add_parser(
@@ -89,6 +89,18 @@ def parse_args() -> argparse.Namespace:
     )
 
     return parser.parse_args()
+
+
+def verify_args(args) -> None:
+    """
+    Verify that the provided args are valid
+
+    Parameters
+    ----------
+    args : argparse.NameSpace
+        parsed command line arguments
+    """
+    pass
 
 
 def upload_single_run(args):
@@ -141,7 +153,7 @@ def monitor_directories_for_upload(config):
     """
     check_aws_access()
 
-    # split each monitored directory to list of it's bucket and path
+    # split each monitored directory to single list of it's bucket and path
     to_monitor = []
 
     for monitor_dir_config in config["monitor"]:
