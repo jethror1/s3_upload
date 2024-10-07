@@ -2,6 +2,7 @@
 
 from glob import glob
 from itertools import zip_longest
+import json
 from os import path, stat
 from pathlib import Path
 import re
@@ -140,3 +141,21 @@ def check_upload_state(dir) -> str:
         _description_
     """
     pass
+
+
+def parse_config(config) -> dict:
+    """
+    Read in the JSON config file
+
+    Parameters
+    ----------
+    config : str
+        filename of config file
+
+    Returns
+    -------
+    dict
+        contents of config file
+    """
+    with open(config, "r") as fh:
+        return json.load(fh)
