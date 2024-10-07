@@ -3,7 +3,7 @@
 from glob import glob
 from itertools import zip_longest
 import json
-from os import path, stat
+from os import path, scandir, stat
 from pathlib import Path
 import re
 from typing import List
@@ -32,6 +32,8 @@ def check_termination_file_exists(run_dir) -> bool:
     bool
         True if run is complete else False
     """
+    log.debug("Checking for termination file in %s", run_dir)
+
     if path.exists(path.join(run_dir, "CopyComplete.txt")):
         # NovaSeq run that is complete
         return True
@@ -59,7 +61,42 @@ def check_is_sequencing_run_dir(run_dir) -> bool:
     bool
         True if directory is a sequencing run else False
     """
+    log.debug("Checking if directory is a sequencing run: %s", run_dir)
     return path.exists(path.join(run_dir, "RunInfo.xml"))
+
+
+def get_runs_to_upload(monitor_dirs) -> list:
+    """
+    Get completed sequencing runs to upload from specified directories
+    to monitor
+
+    Parameters
+    ----------
+    monitor_dirs : list
+        list of directories to check for completed sequencing runs
+
+    Returns
+    -------
+    list
+        list of directories that are completed runs
+    """
+    to_upload = []
+
+    for monitored_dir in monitor_dirs:
+        # check each sub directory if it looks like a completed
+        # sequencing run
+        log.info("Checking %s for completed sequencing runs", monitored_dir)
+        sub_directories = [
+            f.path for f in scandir(monitored_dir) if f.is_dir()
+        ]
+
+        for sub_dir in sub_directories:
+            if check_is_sequencing_run_dir(
+                sub_dir
+            ) and check_termination_file_exists(sub_dir):
+                to_upload.append(sub_dir)
+
+    return to_upload
 
 
 def get_sequencing_file_list(seq_dir, exclude_patterns=None) -> list:
@@ -83,6 +120,7 @@ def get_sequencing_file_list(seq_dir, exclude_patterns=None) -> list:
     list
         sorted list of files by their file size (descending)
     """
+    log.info("Getting list of files to upload in %s", seq_dir)
     files = sorted(
         [
             (x, stat(x).st_size)
@@ -99,6 +137,10 @@ def get_sequencing_file_list(seq_dir, exclude_patterns=None) -> list:
             for x in files
             if not re.search(r"|".join(exclude_patterns), x[0])
         ]
+
+    total_size = sizeof_fmt(sum(x[1] for x in files))
+
+    log.info(f"{len(files)} files found to upload totalling %s", total_size)
 
     return [x[0] for x in files]
 
@@ -162,5 +204,29 @@ def parse_config(config) -> dict:
     dict
         contents of config file
     """
+    log.info("Loading config from %s", config)
     with open(config, "r") as fh:
         return json.load(fh)
+
+
+def sizeof_fmt(num) -> str:
+    """
+    Function to turn bytes to human readable file size format.
+
+    Taken from https://stackoverflow.com/questions/1094841/get-human-readable-version-of-file-size
+
+    Parameters
+    ----------
+    num : int
+        total size in bytes
+
+    Returns
+    -------
+    str
+        file size in human-readable format
+    """
+    for unit in ["", "k", "M", "G", "T", "P", "E", "Z"]:
+        if abs(num) < 1024.0:
+            return f"{num:3.1f}{unit}B"
+        num /= 1024.0
+    return f"{num:.1f}YiB"

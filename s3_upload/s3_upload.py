@@ -5,12 +5,13 @@ from pathlib import Path
 from utils.log import get_logger
 from utils.upload import (
     check_aws_access,
-    check_bucket_exists,
+    check_buckets_exist,
     multi_core_upload,
 )
 from utils.utils import (
     check_is_sequencing_run_dir,
     check_termination_file_exists,
+    get_runs_to_upload,
     get_sequencing_file_list,
     parse_config,
     split_file_list_by_cores,
@@ -69,7 +70,6 @@ def parse_args() -> argparse.Namespace:
     )
     upload_parser.add_argument(
         "--cores",
-        nargs=1,
         required=False,
         default=cpu_count(),
         help=(
@@ -79,7 +79,6 @@ def parse_args() -> argparse.Namespace:
     )
     upload_parser.add_argument(
         "--threads",
-        nargs=1,
         type=int,
         default=8,
         help=(
@@ -113,7 +112,7 @@ def upload_single_run(args):
         parsed command line arguments
     """
     check_aws_access()
-    check_bucket_exists(args.bucket)
+    check_buckets_exist(args.bucket)
 
     if not check_is_sequencing_run_dir(
         args.local_path
@@ -151,23 +150,53 @@ def monitor_directories_for_upload(config):
     config : dict
         contents of config file
     """
+    log.info("Beginning monitoring directories for runs to upload")
+
     check_aws_access()
+    check_buckets_exist(set([x["bucket"] for x in config["monitor"]]))
 
-    # split each monitored directory to single list of it's bucket and path
-    to_monitor = []
+    cores = config.get("max_cores", cpu_count)
+    threads = config.get("max_threads", 4)
 
+    to_upload = []
+
+    # find all the runs to upload in the specified monitored directories
     for monitor_dir_config in config["monitor"]:
-        for monitored_dir in monitor_dir_config["monitored_directories"]:
-            to_monitor.append(
+        completed_runs = get_runs_to_upload(monitor_dir_config)
+
+        to_upload.extend(
+            [
                 {
-                    "monitored_dir": monitored_dir,
+                    "run_dir": run_dir,
+                    "parent_path": Path(run_dir).parent,
                     "bucket": monitor_dir_config["bucket"],
                     "remote_path": monitor_dir_config["remote_path"],
                 }
-            )
+                for run_dir in completed_runs
+            ]
+        )
 
-    for bucket in set([x["bucket"] for x in to_monitor]):
-        check_bucket_exists(bucket)
+    log.info(
+        f"Found {len(to_upload)} sequencing runs to upload:"
+        f" {', '.join([Path(x['run_dir']).name for x in to_upload])}"
+    )
+
+    for run_config in to_upload:
+        files = get_sequencing_file_list(run_config["run_dir"])
+        files = split_file_list_by_cores(files=files, n=cores)
+
+        # pass through the parent of the specified directory to upload
+        # to ensure we upload into the actual run directory
+        parent_path = Path(run_config["run_dir"]).parent
+
+        multi_core_upload(
+            files=files,
+            bucket=run_config["bucket"],
+            remote_path=run_config["remote_path"],
+            cores=cores,
+            threads=threads,
+            parent_path=run_config["parent_path"],
+        )
 
 
 def main() -> None:
