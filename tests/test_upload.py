@@ -39,9 +39,9 @@ class TestCheckAwsAccess(unittest.TestCase):
 
 
 @patch("s3_upload.utils.upload.boto3.client")
-class TestCheckBucketExists(unittest.TestCase):
+class TestCheckBucketsExist(unittest.TestCase):
     def test_bucket_metadata_returned_when_bucket_exists(self, mock_client):
-        bucket_metadata = {
+        valid_bucket_metadata = {
             "ResponseMetadata": {
                 "RequestId": "8WQ3PBQNX",
                 "HostId": "1TvQsTG3ZQfoiuJrEFQBXBCMWFIX6DXA=",
@@ -61,11 +61,33 @@ class TestCheckBucketExists(unittest.TestCase):
             "AccessPointAlias": False,
         }
 
-        mock_client.return_value.head_bucket.return_value = bucket_metadata
+        mock_client.return_value.head_bucket.return_value = (
+            valid_bucket_metadata
+        )
 
-        bucket_details = upload.check_bucket_exists("jethro-s3-test-v2")
+        bucket_details = upload.check_buckets_exist("jethro-s3-test-v2")
 
-        self.assertEqual(bucket_details, bucket_metadata)
+        self.assertEqual(bucket_details, [valid_bucket_metadata])
+
+    def test_runtime_error_raised_if_one_or_more_buckets_not_valid(
+        self, mock_client
+    ):
+        mock_client.side_effect = [
+            s3_exceptions.ClientError(
+                {"Error": {"Code": 1, "Message": "foo"}}, "bar"
+            ),
+            s3_exceptions.ClientError(
+                {"Error": {"Code": 1, "Message": "baz"}}, "blarg"
+            ),
+        ]
+
+        expected_error = (
+            "2 bucket(s) not accessible / do not exist: invalid_bucket_1,"
+            " invalid_bucket_2"
+        )
+
+        with pytest.raises(RuntimeError, match=re.escape(expected_error)):
+            upload.check_buckets_exist("invalid_bucket_1", "invalid_bucket_2")
 
 
 @patch("s3_upload.utils.upload.boto3.session.Session.client")

@@ -14,7 +14,7 @@ from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 from botocore import exceptions as s3_exceptions
 
-from utils.log import get_logger
+from .log import get_logger
 
 
 log = get_logger("s3 upload")
@@ -77,6 +77,8 @@ def check_buckets_exist(*buckets) -> List[dict]:
             f"{len(invalid) } bucket(s) not accessible / do not exist: "
             f"{', '.join(invalid)}"
         )
+
+    return valid
 
 
 def upload_single_file(
