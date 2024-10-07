@@ -2,7 +2,6 @@ import argparse
 from os import cpu_count
 from pathlib import Path
 
-from utils.log import get_logger
 from utils.upload import (
     check_aws_access,
     check_buckets_exist,
@@ -16,6 +15,7 @@ from utils.utils import (
     parse_config,
     split_file_list_by_cores,
 )
+from utils.log import get_logger
 
 
 log = get_logger("s3 upload")

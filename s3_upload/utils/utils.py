@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 from typing import List
 
-from utils.log import get_logger
+from .log import get_logger
 
 
 log = get_logger("s3 upload")
@@ -85,6 +85,7 @@ def get_runs_to_upload(monitor_dirs) -> list:
     for monitored_dir in monitor_dirs:
         # check each sub directory if it looks like a completed
         # sequencing run
+        # TODO - this needs to also check against local log files
         log.info("Checking %s for completed sequencing runs", monitored_dir)
         sub_directories = [
             f.path for f in scandir(monitored_dir) if f.is_dir()
