@@ -226,8 +226,8 @@ def sizeof_fmt(num) -> str:
     str
         file size in human-readable format
     """
-    for unit in ["", "k", "M", "G", "T", "P", "E", "Z"]:
+    for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
         if abs(num) < 1024.0:
-            return f"{num:3.1f}{unit}B"
+            return f"{num:3.2f}{unit}B"
         num /= 1024.0
-    return f"{num:.1f}YiB"
+    return f"{num:.2f}YiB"

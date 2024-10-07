@@ -284,3 +284,23 @@ class TestSplitFileListByCores(unittest.TestCase):
         returned_split_list = utils.split_file_list_by_cores(files=[], n=2)
 
         self.assertEqual([], returned_split_list)
+
+
+class TestSizeofFmt(unittest.TestCase):
+    def test_expected_value_and_suffix_returned(self):
+        bytes_to_formatted = [
+            (0, "0.00B"),
+            (1, "1.00B"),
+            (1050, "1.03KB"),
+            (1234567, "1.18MB"),
+            (123456789, "117.74MB"),
+            (1234567890, "1.15GB"),
+            (112233445566, "104.53GB"),
+            (11223344556677, "10.21TB"),
+            (112233445566778899, "99.68PB"),
+            (11223344556677889900, "9.73EB"),
+        ]
+
+        for byte in bytes_to_formatted:
+            with self.subTest():
+                self.assertEqual(utils.sizeof_fmt(byte[0]), byte[1])
