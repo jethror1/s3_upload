@@ -1,6 +1,7 @@
+from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
 import re
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, call, patch
 
 import boto3
 from botocore import exceptions as s3_exceptions
@@ -143,22 +144,176 @@ class TestUploadSingleFile(unittest.TestCase):
 
 @patch("s3_upload.utils.upload.upload_single_file")
 @patch("s3_upload.utils.upload.boto3.session.Session.client")
-@patch("s3_upload.utils.upload.concurrent.futures.as_completed")
+@patch("s3_upload.utils.upload.as_completed")
 class TestMultiThreadUpload(unittest.TestCase):
-    def test_upload_function_called_with_correct_args(
+    local_files = [
+        "/path/to/monitored_dir/run1/Samplesheet.csv",
+        "/path/to/monitored_dir/run1/RunInfo.xml",
+        "/path/to/monitored_dir/run1/CopyComplete.txt",
+    ]
+
+    def test_correct_number_of_calls_to_upload(
         self, mock_thread, mock_client, mock_upload
     ):
-
-        local_files = [
-            "/path/to/monitored_dir/run1/Samplesheet.csv",
-            "/path/to/monitored_dir/run1/RunInfo.xml",
-            "/path/to/monitored_dir/run1/CopyComplete.txt",
-        ]
-
-        uploaded_files = upload.multi_thread_upload(
-            files=local_files,
+        upload.multi_thread_upload(
+            files=self.local_files,
             bucket="test_bucket",
             remote_path="/",
             threads=4,
             parent_path="/path/to/monitored_dir/",
+        )
+
+        self.assertEqual(mock_upload.call_count, 3)
+
+    @patch("s3_upload.utils.upload.ThreadPoolExecutor")
+    def test_correct_number_of_threads_set(
+        self, mock_pool, mock_thread, mock_client, mock_upload
+    ):
+        for thread in [1, 4]:
+            with self.subTest(f"{thread} thread(s) set to use"):
+                upload.multi_thread_upload(
+                    files=self.local_files,
+                    bucket="test_bucket",
+                    remote_path="/",
+                    threads=thread,
+                    parent_path="/path/to/monitored_dir/",
+                )
+                self.assertEqual(mock_pool.call_args[1]["max_workers"], thread)
+
+    def test_upload_function_called_with_correct_args(
+        self, mock_thread, mock_client, mock_upload
+    ):
+        upload.multi_thread_upload(
+            files=self.local_files,
+            bucket="test_bucket",
+            remote_path="/",
+            threads=4,
+            parent_path="/path/to/monitored_dir/",
+        )
+
+        expected_call_args_for_all_calls = [
+            call(
+                s3_client=ANY,
+                bucket="test_bucket",
+                remote_path="/",
+                local_file="/path/to/monitored_dir/run1/Samplesheet.csv",
+                parent_path="/path/to/monitored_dir/",
+            ),
+            call(
+                s3_client=ANY,
+                bucket="test_bucket",
+                remote_path="/",
+                local_file="/path/to/monitored_dir/run1/RunInfo.xml",
+                parent_path="/path/to/monitored_dir/",
+            ),
+            call(
+                s3_client=ANY,
+                bucket="test_bucket",
+                remote_path="/",
+                local_file="/path/to/monitored_dir/run1/CopyComplete.txt",
+                parent_path="/path/to/monitored_dir/",
+            ),
+        ]
+
+        self.assertEqual(
+            expected_call_args_for_all_calls, mock_upload.call_args_list
+        )
+
+    def test_correct_file_and_id_returned(
+        self, mock_thread, mock_client, mock_upload
+    ):
+        # each upload call per thread will return a dict containing the
+        # ETag of the remote object, patch this in to the future object
+        # that each thread will return
+        mock_thread.return_value = [Future(), Future(), Future()]
+
+        return_values = [
+            ("/path/to/monitored_dir/run1/Samplesheet.csv", "abc"),
+            ("/path/to/monitored_dir/run1/RunInfo.xml", "def"),
+            ("/path/to/monitored_dir/run1/CopyComplete.txt", "ghi"),
+        ]
+
+        for i, j in zip(mock_thread.return_value, return_values):
+            i.set_result(j)
+
+        returned_uploaded_file_mapping = upload.multi_thread_upload(
+            files=self.local_files,
+            bucket="test_bucket",
+            remote_path="/",
+            threads=4,
+            parent_path="/path/to/monitored_dir/",
+        )
+
+        expected_local_file_to_remote_id_mapping = {
+            "/path/to/monitored_dir/run1/Samplesheet.csv": "abc",
+            "/path/to/monitored_dir/run1/RunInfo.xml": "def",
+            "/path/to/monitored_dir/run1/CopyComplete.txt": "ghi",
+        }
+
+        self.assertEqual(
+            expected_local_file_to_remote_id_mapping,
+            returned_uploaded_file_mapping,
+        )
+
+
+class TestMultiCoreUpload(unittest.TestCase):
+
+    local_files = [
+        ["/path/to/monitored_dir/run1/Samplesheet.csv"],
+        ["/path/to/monitored_dir/run1/RunInfo.xml"],
+        ["/path/to/monitored_dir/run1/CopyComplete.txt"],
+    ]
+
+    @patch("s3_upload.utils.upload.as_completed")
+    @patch("s3_upload.utils.upload.ProcessPoolExecutor")
+    def test_correct_number_of_process_pools_set_from_cores_arg(
+        self, mock_pool, mock_completed
+    ):
+        for core in [1, 4]:
+            with self.subTest(f"{core} core(s) set to use"):
+                upload.multi_core_upload(
+                    files=self.local_files,
+                    bucket="test_bucket",
+                    remote_path="/",
+                    cores=core,
+                    threads=1,
+                    parent_path="/path/to/monitored_dir/",
+                )
+                self.assertEqual(mock_pool.call_args[1]["max_workers"], core)
+
+    @patch("s3_upload.utils.upload.as_completed")
+    @patch("s3_upload.utils.upload.ProcessPoolExecutor")
+    def test_returned_file_mapping_correct(self, mock_pool, mock_completed):
+        # each ProcessPool should return a dict mapping from each ThreadPool
+        # of local file to remote object ID, these should then be finally
+        # merged and returned as a single level dict
+        mock_completed.return_value = [Future(), Future(), Future()]
+
+        return_values = [
+            {"/path/to/monitored_dir/run1/Samplesheet.csv": "abc"},
+            {"/path/to/monitored_dir/run1/RunInfo.xml": "def"},
+            {"/path/to/monitored_dir/run1/CopyComplete.txt": "ghi"},
+        ]
+
+        for i, j in zip(mock_completed.return_value, return_values):
+            i.set_result(j)
+
+        returned_uploaded_file_mapping = upload.multi_core_upload(
+            files=self.local_files,
+            bucket="test_bucket",
+            remote_path="/",
+            cores=3,
+            threads=1,
+            parent_path="/path/to/monitored_dir/",
+        )
+
+        expected_local_file_to_remote_id_mapping = {
+            "/path/to/monitored_dir/run1/Samplesheet.csv": "abc",
+            "/path/to/monitored_dir/run1/RunInfo.xml": "def",
+            "/path/to/monitored_dir/run1/CopyComplete.txt": "ghi",
+        }
+
+        self.assertEqual(
+            expected_local_file_to_remote_id_mapping,
+            returned_uploaded_file_mapping,
         )
