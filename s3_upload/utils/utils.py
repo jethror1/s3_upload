@@ -94,11 +94,7 @@ def get_sequencing_file_list(seq_dir, exclude_patterns=None) -> list:
             if not re.search(r"|".join(exclude_patterns), x[0])
         ]
 
-    # remove the leading `seq_dir` path to just keep file paths relative
-    # to the run directory
-    files = [re.sub(re.escape(seq_dir), "", x[0]).lstrip("/") for x in files]
-
-    return files
+    return [x[0] for x in files]
 
 
 def split_file_list_by_cores(files, n) -> List[List[str]]:
