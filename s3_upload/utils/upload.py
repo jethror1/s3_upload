@@ -110,6 +110,8 @@ def upload_single_file(
     upload_file = re.sub(rf"^{parent_path}", "", local_file)
     upload_file = path.join(remote_path, upload_file).lstrip("/")
 
+    log.debug("Uploading %s to %s:%s", local_file, bucket, upload_file)
+
     # set threshold for splitting across cores to 1GB and to not use
     # multiple threads for single file upload to allow us to control
     # this better from the config
@@ -123,6 +125,8 @@ def upload_single_file(
 
     # ensure we can access the remote file to log the object ID
     remote_object = s3_client.get_object(Bucket=bucket, Key=upload_file)
+
+    log.debug("%s uploaded as %s", local_file, remote_object.get("ETag"))
 
     return local_file, remote_object.get("ETag").strip('"')
 
@@ -152,6 +156,8 @@ def multi_thread_upload(
     dict
         mapping of local file to ETag ID of uploaded file
     """
+    log.info(f"Uploading {len(files)} with {threads} threads")
+
     # defining one S3 client per core due to boto3 clients being thread
     # safe but not safe to share across processes due to expected response
     # ordering: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/clients.html#caveats
@@ -216,6 +222,11 @@ def multi_core_upload(
     dict
         mapping of local file to ETag ID of uploaded file
     """
+    log.info(
+        f"Beginning upload {len(files)} files with {cores} cores to"
+        f"{bucket}:{remote_path}"
+    )
+
     uploaded_files = {}
 
     with ProcessPoolExecutor(max_workers=cores) as exe:

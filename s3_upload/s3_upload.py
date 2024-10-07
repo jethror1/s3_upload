@@ -102,6 +102,44 @@ def verify_args(args) -> None:
     pass
 
 
+def verify_config(config) -> None:
+    """
+    Verify that config structure and parameters are valid
+
+    Parameters
+    ----------
+    config : dict
+        contents of config file to check
+    """
+    errors = []
+
+    if not isinstance(config.get("max_cores", 0), int):
+        errors.append("max_cores must be an integer")
+
+    if not isinstance(config.get("max_threads", 0), int):
+        errors.append("max_threads must be an integer")
+
+    if not config.get("log_dir"):
+        errors.append("required parameter log_dir not defined")
+
+    if not config.get("monitor"):
+        errors.append("required parameter monitor not defined")
+
+    for idx, monitor in enumerate(config.get("monitor")):
+        for key in ["monitored_directories", "bucket", "remote_path"]:
+            if not monitor.get(key):
+                errors.append(
+                    f"required parameter {key} missing from monitor section"
+                    f" {idx}"
+                )
+
+        if not isinstance(config.get("monitored_directories"), list):
+            errors.append(
+                "monitored_directories not defined as a list from monitor"
+                f" section {idx}"
+            )
+
+
 def upload_single_run(args):
     """
     Upload provided single run directory into AWS S3
@@ -182,12 +220,9 @@ def monitor_directories_for_upload(config):
     )
 
     for run_config in to_upload:
+        # begin uploading of each sequencing run
         files = get_sequencing_file_list(run_config["run_dir"])
         files = split_file_list_by_cores(files=files, n=cores)
-
-        # pass through the parent of the specified directory to upload
-        # to ensure we upload into the actual run directory
-        parent_path = Path(run_config["run_dir"]).parent
 
         multi_core_upload(
             files=files,
@@ -208,6 +243,7 @@ def main() -> None:
         upload_single_run(args)
     else:
         config = parse_config(config=args.config)
+        verify_config(config=config)
 
         monitor_directories_for_upload(config)
 
