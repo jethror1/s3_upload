@@ -99,6 +99,7 @@ def verify_args(args) -> None:
     args : argparse.NameSpace
         parsed command line arguments
     """
+    # TODO - complete this once I decide on all args to have
     pass
 
 

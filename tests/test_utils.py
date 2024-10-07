@@ -90,6 +90,11 @@ class TestCheckIsSequencingRunDir(unittest.TestCase):
         os.remove(run_info_xml)
 
 
+class TestGetRunsToUpload(unittest.TestCase):
+    # TODO -  add unit tests
+    pass
+
+
 class TestGetSequencingFileList(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
