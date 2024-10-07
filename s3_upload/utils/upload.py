@@ -7,6 +7,7 @@ from concurrent.futures import (
 )
 from os import path
 import re
+from typing import List
 
 import boto3
 from boto3.s3.transfer import TransferConfig
@@ -41,27 +42,41 @@ def check_aws_access():
         raise RuntimeError(f"Error in connecting to AWS: {err}") from err
 
 
-def check_bucket_exists(bucket):
+def check_bucket_exists(*buckets) -> List[dict]:
     """
-    Check that the provided bucket exists and is accessible
+    Check that the provided bucket(s) exists and is accessible
 
     Parameters
     ----------
-    bucket : str
-        S3 bucket to check access
+    buckets : list
+        S3 bucket(s) to check access for
 
     Returns
     -------
-    dict
-        bucket metadata
+    list
+        lists of dicts with bucket metadata
 
     Raises
     ------
-    botocore.exceptions.ClientError
-        Raised when bucket does not exist / not accessible
+    RuntimeError
+        Raised when one or more buckets do not exist / not accessible
     """
-    log.info("Checking bucket %s exists", bucket)
-    return boto3.client("s3").head_bucket(Bucket=bucket)
+    log.info("Checking bucket(s) %s exist", buckets)
+
+    valid = []
+    invalid = []
+
+    for bucket in buckets:
+        try:
+            valid.append(boto3.client("s3").head_bucket(Bucket=bucket))
+        except s3_exceptions.ClientError:
+            invalid.append(bucket)
+
+    if invalid:
+        raise RuntimeError(
+            f"{len(invalid) } bucket(s) not accessible / do not exist: "
+            f"{', '.join(invalid)}"
+        )
 
 
 def upload_single_file(
