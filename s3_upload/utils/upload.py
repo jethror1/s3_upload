@@ -13,6 +13,11 @@ from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 from botocore import exceptions as s3_exceptions
 
+from utils.log import get_logger
+
+
+log = get_logger("s3 upload")
+
 
 def check_aws_access():
     """
@@ -29,6 +34,7 @@ def check_aws_access():
     botocore.exceptions.ClientError
         Raised when unable to connect to AWS
     """
+    log.info("Checking access to AWS")
     try:
         return list(boto3.Session().resource("s3").buckets.all())
     except s3_exceptions.ClientError as err:
@@ -54,6 +60,7 @@ def check_bucket_exists(bucket):
     botocore.exceptions.ClientError
         Raised when bucket does not exist / not accessible
     """
+    log.info("Checking bucket %s exists", bucket)
     return boto3.client("s3").head_bucket(Bucket=bucket)
 
 

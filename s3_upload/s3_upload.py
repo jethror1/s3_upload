@@ -1,14 +1,23 @@
 import argparse
-from os import cpu_count, listdir, path
+from os import cpu_count
 from pathlib import Path
 
-
+from utils.log import get_logger
 from utils.upload import (
     check_aws_access,
     check_bucket_exists,
     multi_core_upload,
 )
-from utils.utils import get_sequencing_file_list, split_file_list_by_cores
+from utils.utils import (
+    check_is_sequencing_run_dir,
+    check_termination_file_exists,
+    get_sequencing_file_list,
+    parse_config,
+    split_file_list_by_cores,
+)
+
+
+log = get_logger("s3 upload")
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,7 +44,8 @@ def parse_args() -> argparse.Namespace:
     )
 
     monitor_parser.add_argument(
-        "--upload_config",
+        "--config",
+        required=True,
         help="path config file for monitoring directories to upload",
     )
 
@@ -81,28 +91,84 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def upload_single_run(args):
+    """
+    Upload provided single run directory into AWS S3
+
+    Parameters
+    ----------
+    args : argparse.NameSpace
+        parsed command line arguments
+    """
+    check_aws_access()
+    check_bucket_exists(args.bucket)
+
+    if not check_is_sequencing_run_dir(
+        args.local_path
+    ) or not check_termination_file_exists(args.local_path):
+        log.error(
+            f"Provided directory: {args.local_path} does not appear to be"
+            " a complete sequencing run. Please check the provided path"
+            " and try again."
+        )
+        exit()
+
+    files = get_sequencing_file_list(args.local_path)
+    files = split_file_list_by_cores(files=files, n=args.cores)
+
+    # pass through the parent of the specified directory to upload
+    # to ensure we upload into the actual run directory
+    parent_path = Path(args.local_path).parent
+
+    multi_core_upload(
+        files=files,
+        bucket=args.bucket,
+        remote_path=args.remote_path,
+        cores=args.cores,
+        threads=args.threads,
+        parent_path=parent_path,
+    )
+
+
+def monitor_directories_for_upload(config):
+    """
+    Monitor specified directories for complete sequencing runs to upload
+
+    Parameters
+    ----------
+    config : dict
+        contents of config file
+    """
+    check_aws_access()
+
+    # split each monitored directory to list of it's bucket and path
+    to_monitor = []
+
+    for monitor_dir_config in config["monitor"]:
+        for monitored_dir in monitor_dir_config["monitored_directories"]:
+            to_monitor.append(
+                {
+                    "monitored_dir": monitored_dir,
+                    "bucket": monitor_dir_config["bucket"],
+                    "remote_path": monitor_dir_config["remote_path"],
+                }
+            )
+
+    for bucket in set([x["bucket"] for x in to_monitor]):
+        check_bucket_exists(bucket)
+
+
 def main() -> None:
     args = parse_args()
 
+    # TODO -  add function to check log dir readable
+
     if args.mode == "upload":
-        check_aws_access()
-        check_bucket_exists(args.bucket)
+        upload_single_run(args)
+    else:
+        config = parse_config(config=args.config)
 
-        files = get_sequencing_file_list(args.local_path)
-        files = split_file_list_by_cores(files=files, n=args.cores)
-
-        # pass through the parent of the specified directory to upload
-        # to ensure we upload into the actual run directory
-        parent_path = Path(args.local_path).parent
-
-        multi_core_upload(
-            files=files,
-            bucket=args.bucket,
-            remote_path=args.remote_path,
-            cores=args.cores,
-            threads=args.threads,
-            parent_path=parent_path,
-        )
+        monitor_directories_for_upload(config)
 
 
 if __name__ == "__main__":

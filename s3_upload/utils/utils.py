@@ -8,6 +8,11 @@ from pathlib import Path
 import re
 from typing import List
 
+from utils.log import get_logger
+
+
+log = get_logger("s3 upload")
+
 
 def check_termination_file_exists(run_dir) -> bool:
     """
