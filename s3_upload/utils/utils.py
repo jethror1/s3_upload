@@ -87,14 +87,20 @@ def get_runs_to_upload(monitor_dirs) -> list:
         # sequencing run
         # TODO - this needs to also check against local log files
         log.info("Checking %s for completed sequencing runs", monitored_dir)
+
         sub_directories = [
             f.path for f in scandir(monitored_dir) if f.is_dir()
         ]
+
+        log.debug(
+            "directories found in %s: %s", monitored_dir, sub_directories
+        )
 
         for sub_dir in sub_directories:
             if check_is_sequencing_run_dir(
                 sub_dir
             ) and check_termination_file_exists(sub_dir):
+                log.debug("%s is a completed sequencing run", sub_dir)
                 to_upload.append(sub_dir)
 
     return to_upload
