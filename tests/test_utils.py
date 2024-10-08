@@ -47,7 +47,7 @@ class TestCheckTerminationFileExists(unittest.TestCase):
 
             open(termination_file, "w").close()
 
-            with self.subTest("Checking RTAComplete.txt"):
+            with self.subTest(f"Checking RTAComplete.{suffix}"):
                 self.assertTrue(
                     utils.check_termination_file_exists(self.test_run_dir)
                 )
