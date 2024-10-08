@@ -89,6 +89,19 @@ class TestCheckBucketsExist(unittest.TestCase):
         with pytest.raises(RuntimeError, match=re.escape(expected_error)):
             upload.check_buckets_exist("invalid_bucket_1", "invalid_bucket_2")
 
+    def test_client_error_raised_when_bucket_does_not_exist(self, mock_client):
+        mock_client.side_effect = s3_exceptions.ClientError(
+            {"Error": {"Code": 1, "Message": "foo"}}, "bar"
+        )
+
+        expected_error = (
+            "Error in accessing bucket s3-test. An error occurred (1) when "
+            "calling the bar operation: foo"
+        )
+
+        with pytest.raises(RuntimeError, match=re.escape(expected_error)):
+            upload.check_bucket_exists("s3-test")
+
 
 @patch("s3_upload.utils.upload.boto3.session.Session.client")
 class TestUploadSingleFile(unittest.TestCase):
