@@ -130,12 +130,22 @@ def verify_config(config) -> None:
         errors.append("required parameter monitor not defined")
 
     for idx, monitor in enumerate(config.get("monitor")):
-        for key in ["monitored_directories", "bucket", "remote_path"]:
+        for key, expected_type in {
+            "monitored_directories": list,
+            "bucket": str,
+            "remote_path": str,
+        }:
             if not monitor.get(key):
                 errors.append(
                     f"required parameter {key} missing from monitor section"
                     f" {idx}"
                 )
+            else:
+                if not isinstance(key, expected_type):
+                    errors.append(
+                        f"{key} not of expected type {expected_type} from "
+                        f"monitor section {idx}"
+                    )
 
         if not isinstance(config.get("monitored_directories"), list):
             errors.append(
