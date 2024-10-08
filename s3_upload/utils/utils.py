@@ -210,6 +210,73 @@ def read_config(config) -> dict:
         return json.load(fh)
 
 
+def verify_args(args) -> None:
+    """
+    Verify that the provided args are valid
+
+    Parameters
+    ----------
+    args : argparse.NameSpace
+        parsed command line arguments
+    """
+    # TODO - complete this once I decide on all args to have
+    pass
+
+
+def verify_config(config) -> None:
+    """
+    Verify that config structure and parameters are valid
+
+    Parameters
+    ----------
+    config : dict
+        contents of config file to check
+    """
+    log.debug(
+        "Verifying contents of config are valid, contents parsed: %s", config
+    )
+    errors = []
+
+    if not isinstance(config.get("max_cores", 0), int):
+        errors.append("max_cores must be an integer")
+
+    if not isinstance(config.get("max_threads", 0), int):
+        errors.append("max_threads must be an integer")
+
+    if not config.get("log_dir"):
+        errors.append("required parameter log_dir not defined")
+
+    if not config.get("monitor"):
+        errors.append("required parameter monitor not defined")
+
+    for idx, monitor in enumerate(config.get("monitor")):
+        for key, expected_type in {
+            "monitored_directories": list,
+            "bucket": str,
+            "remote_path": str,
+        }:
+            if not monitor.get(key):
+                errors.append(
+                    f"required parameter {key} missing from monitor section"
+                    f" {idx}"
+                )
+            else:
+                if not isinstance(key, expected_type):
+                    errors.append(
+                        f"{key} not of expected type {expected_type} from "
+                        f"monitor section {idx}"
+                    )
+
+    if errors:
+        error_message = (
+            f"{len(errors)} errors found in config: {', '.join(errors)}"
+        )
+        log.error(error_message)
+        raise RuntimeError(error_message)
+    else:
+        log.debug("Config valid")
+
+
 def sizeof_fmt(num) -> str:
     """
     Function to turn bytes to human readable file size format.
