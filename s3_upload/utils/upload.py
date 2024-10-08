@@ -134,7 +134,7 @@ def upload_single_file(
 
     log.debug("%s uploaded as %s", local_file, remote_object.get("ETag"))
 
-    return local_file, remote_object.get("ETag").strip('"')
+    return local_file, remote_object.get("ETag", "").strip('"')
 
 
 def multi_thread_upload(
@@ -162,17 +162,22 @@ def multi_thread_upload(
     dict
         mapping of local file to ETag ID of uploaded file
     """
-    log.info(f"Uploading {len(files)} with {threads} threads")
+    log.info("Uploading %s with %s threads", len(files), threads)
 
     # defining one S3 client per core due to boto3 clients being thread
     # safe but not safe to share across processes due to expected response
     # ordering: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/clients.html#caveats
     session = boto3.session.Session()
     s3_client = session.client(
-        "s3", config=Config(retries={"max_attempts": 10, "mode": "standard"})
+        "s3",
+        config=Config(
+            retries={"total_max_attempts": 10, "mode": "standard"},
+            disable_request_compression=True,
+        ),
     )
 
     uploaded_files = {}
+    failed_upload = []
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
         concurrent_jobs = {
@@ -193,9 +198,10 @@ def multi_thread_upload(
                 local_file, remote_id = future.result()
                 uploaded_files[local_file] = remote_id
             except Exception as exc:
-                # catch any other errors that might get raised
+                # catch any errors that may get raised from uploading
+                # we will return a list of failed files to try reupload
+                # later
                 print(f"\nError: {concurrent_jobs[future]}: {exc}")
-                raise exc
 
     return uploaded_files
 
@@ -234,6 +240,7 @@ def multi_core_upload(
     )
 
     uploaded_files = {}
+    failed_upload = []
 
     with ProcessPoolExecutor(max_workers=cores) as exe:
         concurrent_jobs = {
