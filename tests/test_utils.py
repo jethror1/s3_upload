@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import re
 from shutil import rmtree
 import unittest
@@ -93,8 +94,50 @@ class TestCheckIsSequencingRunDir(unittest.TestCase):
 
 
 class TestGetRunsToUpload(unittest.TestCase):
-    # TODO -  add unit tests
-    pass
+    def test_uploadable_directories_correctly_returned(self):
+        test_run_dir_structure = [
+            # valid incomplete NovaSeq run -> not to upload
+            "seq1/run1/RunInfo.xml",
+            # valid complete NovaSeq run -> upload
+            "seq1/run2/RunInfo.xml",
+            "seq1/run2/CopyComplete.txt",
+            # valid complete other sequencer run -> upload
+            "seq2/run3/RunInfo.xml",
+            "seq2/run3/RTAComplete.txt",
+            # other non run directory -> not to upload
+            "seq2/some_dir/file1.txt",
+        ]
+
+        test_run_dir_structure = [
+            os.path.join(TEST_DATA_DIR, x) for x in test_run_dir_structure
+        ]
+
+        # create the test files and dir structure
+        for test_file in test_run_dir_structure:
+            os.makedirs(
+                Path(test_file).parent,
+                exist_ok=True,
+            )
+            open(test_file, "w").close()
+
+        returned_upload_dirs = utils.get_runs_to_upload(
+            monitor_dirs=[
+                os.path.join(TEST_DATA_DIR, "seq1"),
+                os.path.join(TEST_DATA_DIR, "seq2"),
+            ]
+        )
+
+        valid_upload_dirs = [
+            os.path.join(TEST_DATA_DIR, "seq1/run2"),
+            os.path.join(TEST_DATA_DIR, "seq2/run3"),
+        ]
+
+        with self.subTest():
+            self.assertEqual(valid_upload_dirs, returned_upload_dirs)
+
+        # clear out the created test directories
+        rmtree(os.path.join(TEST_DATA_DIR, "seq1"))
+        rmtree(os.path.join(TEST_DATA_DIR, "seq2"))
 
 
 class TestGetSequencingFileList(unittest.TestCase):
