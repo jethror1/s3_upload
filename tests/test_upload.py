@@ -94,13 +94,10 @@ class TestCheckBucketsExist(unittest.TestCase):
             {"Error": {"Code": 1, "Message": "foo"}}, "bar"
         )
 
-        expected_error = (
-            "Error in accessing bucket s3-test. An error occurred (1) when "
-            "calling the bar operation: foo"
-        )
+        expected_error = "1 bucket(s) not accessible / do not exist: s3-test"
 
         with pytest.raises(RuntimeError, match=re.escape(expected_error)):
-            upload.check_bucket_exists("s3-test")
+            upload.check_buckets_exist("s3-test")
 
 
 @patch("s3_upload.utils.upload.boto3.session.Session.client")
