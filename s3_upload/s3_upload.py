@@ -147,12 +147,6 @@ def verify_config(config) -> None:
                         f"monitor section {idx}"
                     )
 
-        if not isinstance(config.get("monitored_directories"), list):
-            errors.append(
-                "monitored_directories not defined as a list from monitor"
-                f" section {idx}"
-            )
-
     if errors:
         error_message = (
             f"{len(errors)} errors found in config: {', '.join(errors)}"
