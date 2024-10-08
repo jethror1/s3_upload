@@ -410,6 +410,7 @@ class TestSizeofFmt(unittest.TestCase):
             (11223344556677, "10.21TB"),
             (112233445566778899, "99.68PB"),
             (11223344556677889900, "9.73EB"),
+            (111222333444555666777888999, "92.00YiB"),
         ]
 
         for byte in bytes_to_formatted:
