@@ -68,18 +68,21 @@ def check_buckets_exist(*buckets) -> List[dict]:
 
     for bucket in buckets:
         try:
+            log.debug("Checking %s exists and accessible", bucket)
             valid.append(boto3.client("s3").head_bucket(Bucket=bucket))
         except s3_exceptions.ClientError:
             invalid.append(bucket)
 
     if invalid:
-        raise RuntimeError(
+        error_message = (
             f"{len(invalid) } bucket(s) not accessible / do not exist: "
             f"{', '.join(invalid)}"
         )
+        log.error(error_message)
+        raise RuntimeError(error_message)
 
+    log.debug("All buckets exist and accessible")
     return valid
-
 
 
 def upload_single_file(
