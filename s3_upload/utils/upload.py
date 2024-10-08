@@ -7,11 +7,17 @@ from concurrent.futures import (
 )
 from os import path
 import re
+from typing import List
 
 import boto3
 from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 from botocore import exceptions as s3_exceptions
+
+from .log import get_logger
+
+
+log = get_logger("s3 upload")
 
 
 def check_aws_access():
@@ -29,35 +35,54 @@ def check_aws_access():
     botocore.exceptions.ClientError
         Raised when unable to connect to AWS
     """
+    log.info("Checking access to AWS")
     try:
         return list(boto3.Session().resource("s3").buckets.all())
     except s3_exceptions.ClientError as err:
         raise RuntimeError(f"Error in connecting to AWS: {err}") from err
 
 
-def check_bucket_exists(bucket):
+def check_buckets_exist(*buckets) -> List[dict]:
     """
-    Check that the provided bucket exists and is accessible
+    Check that the provided bucket(s) exist and are accessible
 
     Parameters
     ----------
-    bucket : str
-        S3 bucket to check access
+    buckets : list
+        S3 bucket(s) to check access for
 
     Returns
     -------
-    dict
-        bucket metadata
+    list
+        lists of dicts with bucket metadata
 
     Raises
     ------
     RuntimeError
-        Raised when bucket does not exist / not accessible
+        Raised when one or more buckets do not exist / not accessible
     """
-    try:
-        return boto3.client("s3").head_bucket(Bucket=bucket)
-    except s3_exceptions.ClientError as err:
-        raise RuntimeError(f"Error in accessing bucket {bucket}. {err}")
+    log.info("Checking bucket(s) %s exist", buckets)
+
+    valid = []
+    invalid = []
+
+    for bucket in buckets:
+        try:
+            log.debug("Checking %s exists and accessible", bucket)
+            valid.append(boto3.client("s3").head_bucket(Bucket=bucket))
+        except s3_exceptions.ClientError:
+            invalid.append(bucket)
+
+    if invalid:
+        error_message = (
+            f"{len(invalid) } bucket(s) not accessible / do not exist: "
+            f"{', '.join(invalid)}"
+        )
+        log.error(error_message)
+        raise RuntimeError(error_message)
+
+    log.debug("All buckets exist and accessible")
+    return valid
 
 
 def upload_single_file(
@@ -91,6 +116,8 @@ def upload_single_file(
     upload_file = re.sub(rf"^{parent_path}", "", local_file)
     upload_file = path.join(remote_path, upload_file).lstrip("/")
 
+    log.debug("Uploading %s to %s:%s", local_file, bucket, upload_file)
+
     # set threshold for splitting across cores to 1GB and to not use
     # multiple threads for single file upload to allow us to control
     # this better from the config
@@ -104,6 +131,8 @@ def upload_single_file(
 
     # ensure we can access the remote file to log the object ID
     remote_object = s3_client.get_object(Bucket=bucket, Key=upload_file)
+
+    log.debug("%s uploaded as %s", local_file, remote_object.get("ETag"))
 
     return local_file, remote_object.get("ETag").strip('"')
 
@@ -133,6 +162,8 @@ def multi_thread_upload(
     dict
         mapping of local file to ETag ID of uploaded file
     """
+    log.info(f"Uploading {len(files)} with {threads} threads")
+
     # defining one S3 client per core due to boto3 clients being thread
     # safe but not safe to share across processes due to expected response
     # ordering: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/clients.html#caveats
@@ -197,6 +228,11 @@ def multi_core_upload(
     dict
         mapping of local file to ETag ID of uploaded file
     """
+    log.info(
+        f"Beginning upload {len(files)} files with {cores} cores to"
+        f"{bucket}:{remote_path}"
+    )
+
     uploaded_files = {}
 
     with ProcessPoolExecutor(max_workers=cores) as exe:

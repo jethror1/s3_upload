@@ -47,7 +47,7 @@ class TestCheckTerminationFileExists(unittest.TestCase):
 
             open(termination_file, "w").close()
 
-            with self.subTest("Checking RTAComplete.txt"):
+            with self.subTest(f"Checking RTAComplete.{suffix}"):
                 self.assertTrue(
                     utils.check_termination_file_exists(self.test_run_dir)
                 )
@@ -56,7 +56,7 @@ class TestCheckTerminationFileExists(unittest.TestCase):
 
     def test_incomplete_sequencing_run_returns_false(self):
         """
-        Check incomoplete runs correctly identified
+        Check incomplete runs correctly identified
         """
         self.assertFalse(
             utils.check_termination_file_exists(self.test_run_dir)
@@ -88,6 +88,11 @@ class TestCheckIsSequencingRunDir(unittest.TestCase):
             utils.check_is_sequencing_run_dir(self.test_run_dir)
 
         os.remove(run_info_xml)
+
+
+class TestGetRunsToUpload(unittest.TestCase):
+    # TODO -  add unit tests
+    pass
 
 
 class TestGetSequencingFileList(unittest.TestCase):
@@ -284,3 +289,46 @@ class TestSplitFileListByCores(unittest.TestCase):
         returned_split_list = utils.split_file_list_by_cores(files=[], n=2)
 
         self.assertEqual([], returned_split_list)
+
+
+class TestParseConfig(unittest.TestCase):
+    def test_contents_of_config_returned_as_dict(self):
+        config_contents = utils.read_config(
+            os.path.join(TEST_DATA_DIR, "test_config.json")
+        )
+
+        expected_contents = {
+            "max_cores": 4,
+            "max_threads": 8,
+            "log_level": "INFO",
+            "log_dir": "/var/log/s3_upload",
+            "monitor": [
+                {
+                    "monitored_directories": ["/absolute/path/to/sequencer_1"],
+                    "bucket": "bucket_A",
+                    "remote_path": "/",
+                },
+            ],
+        }
+
+        self.assertEqual(expected_contents, config_contents)
+
+
+class TestSizeofFmt(unittest.TestCase):
+    def test_expected_value_and_suffix_returned(self):
+        bytes_to_formatted = [
+            (0, "0.00B"),
+            (1, "1.00B"),
+            (1050, "1.03KB"),
+            (1234567, "1.18MB"),
+            (123456789, "117.74MB"),
+            (1234567890, "1.15GB"),
+            (112233445566, "104.53GB"),
+            (11223344556677, "10.21TB"),
+            (112233445566778899, "99.68PB"),
+            (11223344556677889900, "9.73EB"),
+        ]
+
+        for byte in bytes_to_formatted:
+            with self.subTest():
+                self.assertEqual(utils.sizeof_fmt(byte[0]), byte[1])
