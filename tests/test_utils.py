@@ -1,9 +1,11 @@
 import os
+import re
 from shutil import rmtree
 import unittest
 
-from tests import TEST_DATA_DIR
+import pytest
 
+from tests import TEST_DATA_DIR
 from s3_upload.utils import utils
 
 
@@ -312,6 +314,70 @@ class TestParseConfig(unittest.TestCase):
         }
 
         self.assertEqual(expected_contents, config_contents)
+
+
+class TestVerifyArgs(unittest.TestCase):
+    # TODO - add tests
+    pass
+
+
+class TestVerifyConfig(unittest.TestCase):
+    def test_valid_config_passes(self):
+        valid_config = {
+            "max_cores": 4,
+            "max_threads": 8,
+            "log_level": "INFO",
+            "log_dir": "/var/log/s3_upload",
+            "monitor": [
+                {
+                    "monitored_directories": [
+                        "/absolute/path/to/sequencer_1",
+                        "/absolute/path/to/sequencer_2",
+                    ],
+                    "bucket": "bucket_A",
+                    "remote_path": "/",
+                },
+                {
+                    "monitored_directories": [
+                        "/absolute/path/to/sequencer_3",
+                    ],
+                    "bucket": "bucket_B",
+                    "remote_path": "/sequencer_3_runs",
+                },
+            ],
+        }
+
+        utils.verify_config(valid_config)
+
+    def test_invalid_config_raises_runtime_error_with_expected_errors(self):
+        invalid_config = {
+            "max_cores": "4",
+            "log_level": "INFO",
+            "monitor": [
+                {
+                    "bucket": "bucket_A",
+                },
+                {
+                    "monitored_directories": [
+                        "/absolute/path/to/sequencer_3",
+                    ],
+                    "bucket": 1,
+                    "remote_path": "/sequencer_3_runs",
+                },
+            ],
+        }
+
+        expected_errors = (
+            "5 errors found in config:\n\tmax_cores must be an"
+            " integer\n\trequired parameter log_dir not defined\n\trequired"
+            " parameter monitored_directories missing from monitor section"
+            " 0\n\trequired parameter remote_path missing from monitor section"
+            " 0\n\tbucket not of expected type from monitor section 1."
+            " Expected: <class 'str'> | Found <class 'int'>"
+        )
+
+        with pytest.raises(RuntimeError, match=re.escape(expected_errors)):
+            utils.verify_config(invalid_config)
 
 
 class TestSizeofFmt(unittest.TestCase):

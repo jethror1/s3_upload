@@ -254,22 +254,24 @@ def verify_config(config) -> None:
             "monitored_directories": list,
             "bucket": str,
             "remote_path": str,
-        }:
+        }.items():
             if not monitor.get(key):
                 errors.append(
                     f"required parameter {key} missing from monitor section"
                     f" {idx}"
                 )
             else:
-                if not isinstance(key, expected_type):
+                if not isinstance(monitor.get(key), expected_type):
                     errors.append(
-                        f"{key} not of expected type {expected_type} from "
-                        f"monitor section {idx}"
+                        f"{key} not of expected type from monitor section "
+                        f"{idx}. Expected: {expected_type} | Found "
+                        f"{type(monitor.get(key))}"
                     )
 
     if errors:
         error_message = (
-            f"{len(errors)} errors found in config: {', '.join(errors)}"
+            f"{len(errors)} errors found in config:{chr(10)}{chr(9)}"
+            f"{f'{chr(10)}{chr(9)}'.join(errors)}"
         )
         log.error(error_message)
         raise RuntimeError(error_message)
