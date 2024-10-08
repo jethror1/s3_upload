@@ -112,6 +112,9 @@ def verify_config(config) -> None:
     config : dict
         contents of config file to check
     """
+    log.debug(
+        "Verifying contents of config are valid, contents parsed: %s", config
+    )
     errors = []
 
     if not isinstance(config.get("max_cores", 0), int):
@@ -139,6 +142,15 @@ def verify_config(config) -> None:
                 "monitored_directories not defined as a list from monitor"
                 f" section {idx}"
             )
+
+    if errors:
+        error_message = (
+            f"{len(errors)} errors found in config: {', '.join(errors)}"
+        )
+        log.error(error_message)
+        raise RuntimeError(error_message)
+    else:
+        log.debug("Config valid")
 
 
 def upload_single_run(args):
