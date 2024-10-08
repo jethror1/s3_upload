@@ -352,6 +352,7 @@ class TestVerifyConfig(unittest.TestCase):
     def test_invalid_config_raises_runtime_error_with_expected_errors(self):
         invalid_config = {
             "max_cores": "4",
+            "max_threads": "8",
             "log_level": "INFO",
             "monitor": [
                 {
@@ -368,15 +369,31 @@ class TestVerifyConfig(unittest.TestCase):
         }
 
         expected_errors = (
-            "5 errors found in config:\n\tmax_cores must be an"
-            " integer\n\trequired parameter log_dir not defined\n\trequired"
-            " parameter monitored_directories missing from monitor section"
-            " 0\n\trequired parameter remote_path missing from monitor section"
-            " 0\n\tbucket not of expected type from monitor section 1."
-            " Expected: <class 'str'> | Found <class 'int'>"
+            "6 errors found in config:\n\tmax_cores must be an"
+            " integer\n\tmax_threads must be an integer\n\trequired parameter"
+            " log_dir not defined\n\trequired parameter monitored_directories"
+            " missing from monitor section 0\n\trequired parameter remote_path"
+            " missing from monitor section 0\n\tbucket not of expected type"
+            " from monitor section 1. Expected: <class 'str'> | Found <class"
+            " 'int'>"
         )
 
         with pytest.raises(RuntimeError, match=re.escape(expected_errors)):
+            utils.verify_config(invalid_config)
+
+    def test_missing_monitor_section_raises_runtime_error(self):
+        invalid_config = {
+            "max_cores": 4,
+            "max_threads": 8,
+            "log_dir": "/var/log/s3_upload",
+        }
+
+        expected_error = (
+            "1 errors found in config:\n\trequired parameter monitor not"
+            " defined"
+        )
+
+        with pytest.raises(RuntimeError, match=re.escape(expected_error)):
             utils.verify_config(invalid_config)
 
 

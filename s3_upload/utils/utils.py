@@ -249,7 +249,7 @@ def verify_config(config) -> None:
     if not config.get("monitor"):
         errors.append("required parameter monitor not defined")
 
-    for idx, monitor in enumerate(config.get("monitor")):
+    for idx, monitor in enumerate(config.get("monitor", "")):
         for key, expected_type in {
             "monitored_directories": list,
             "bucket": str,
