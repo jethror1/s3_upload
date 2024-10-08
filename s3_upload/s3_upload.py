@@ -189,8 +189,6 @@ def monitor_directories_for_upload(config):
 def main() -> None:
     args = parse_args()
 
-    # TODO -  add function to check log dir readable
-
     if args.mode == "upload":
         upload_single_run(args)
     else:
