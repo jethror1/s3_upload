@@ -272,8 +272,8 @@ def write_upload_state_to_log(
         path to run directory being uploaded
     log_file : str
         file to write log to
-    local_files : list[list]
-        list of list of local files provided to upload
+    local_files : list
+        list of local files provided to upload
     uploaded_files : dict
         mapping of uploaded local file path to remote object ID
     failed_files : list
@@ -284,9 +284,9 @@ def write_upload_state_to_log(
     dict
         all log data for the run
     """
-    total_local_files = len([x for y in local_files for x in y])
+    total_local_files = len(local_files)
     total_uploaded_files = len(uploaded_files.keys())
-    total_failed_files = len(failed_files)
+    total_failed_upload = len(failed_files)
 
     log.info("logging upload state of %s", run_id)
     log.info(
@@ -294,12 +294,12 @@ def write_upload_state_to_log(
         " upload: %s",
         total_local_files,
         total_uploaded_files,
-        total_failed_files,
+        total_failed_upload,
     )
 
     if path.exists(log_file):
         # log file already exists => continuing previous failed upload
-        log.debug("log file already exists at %s", log_file)
+        log.debug("log file already exists to update at %s", log_file)
 
         with open(log_file, "r") as fh:
             log_data = json.load(fh)
@@ -316,18 +316,25 @@ def write_upload_state_to_log(
         }
 
     log_data["total_uploaded_files"] += total_uploaded_files
-    log_data["total_failed_upload"] = total_failed_files
+    log_data["total_failed_upload"] = total_failed_upload
     log_data["failed_upload_files"] = failed_files
     log_data["uploaded_files"] = {
         **log_data["uploaded_files"],
         **uploaded_files,
     }
 
-    if total_failed_files == 0 and total_local_files == total_uploaded_files:
+    if (
+        total_failed_upload == 0
+        and total_local_files == log_data["total_uploaded_files"]
+    ):
         log.info(
-            "All files uploaded and no files failed, run completed uploading"
+            "All local files uploaded and no files failed uploading, run"
+            " completed uploading"
         )
         log_data["completed"] = True
+
+    with open(log_file, "w") as fh:
+        json.dump(log_data, fh, indent=4)
 
     return log_data
 
