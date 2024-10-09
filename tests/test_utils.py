@@ -97,7 +97,7 @@ class TestCheckIsSequencingRunDir(unittest.TestCase):
 
 @patch("s3_upload.utils.utils.path.exists")
 @patch("s3_upload.utils.utils.read_upload_state_log")
-class TestReadUploadStateLog(unittest.TestCase):
+class TestCheckUploadState(unittest.TestCase):
     def test_new_returned_when_upload_log_does_not_exist(
         self, mock_log, mock_exists
     ):
@@ -362,6 +362,18 @@ class TestGetSequencingFileList(unittest.TestCase):
                 self.assertEqual(
                     sorted(returned_file_list), sorted(expected_files)
                 )
+
+
+class TestFilterUploadedFiles(unittest.TestCase):
+    def test_correct_file_list_returned(self):
+        local_files = ['file1.txt', 'file2.txt', 'file3.txt']
+        uploaded_files = ['file1.txt', 'file2.txt']
+
+        to_upload = utils.filter_uploaded_files(
+            local_files=local_files, uploaded_files=uploaded_files
+        )
+
+        self.assertEqual(to_upload, ['file3.txt'])
 
 
 class TestSplitFileListByCores(unittest.TestCase):
