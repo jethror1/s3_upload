@@ -1,8 +1,10 @@
+import json
 import os
 from pathlib import Path
 import re
 from shutil import rmtree
 import unittest
+from unittest.mock import patch
 
 import pytest
 
@@ -357,6 +359,195 @@ class TestParseConfig(unittest.TestCase):
         }
 
         self.assertEqual(expected_contents, config_contents)
+
+
+class TestReadUploadStateLog(unittest.TestCase):
+    pass
+
+
+@patch("s3_upload.utils.utils.path.exists")
+class TestWriteUploadStateToLog(unittest.TestCase):
+    def tearDown(self):
+        os.remove(os.path.join(TEST_DATA_DIR, "test_run.upload.log.json"))
+
+    def test_when_no_file_exists_for_fully_uploaded_run(self, mock_exists):
+        mock_exists.return_value = False
+        log_file = os.path.join(TEST_DATA_DIR, "test_run.upload.log.json")
+
+        utils.write_upload_state_to_log(
+            run_id="test_run",
+            run_path="/some/path/seq1/test_run",
+            log_file=log_file,
+            local_files=["file1.txt", "file2.txt", "file3.txt"],
+            uploaded_files={
+                "file1.txt": "abc123",
+                "file2.txt": "def456",
+                "file3.txt": "ghi789",
+            },
+            failed_files=[],
+        )
+
+        with open(log_file, "r") as fh:
+            written_log_contents = json.load(fh)
+
+        expected_log_contents = {
+            "run_id": "test_run",
+            "run path": "/some/path/seq1/test_run",
+            "completed": True,
+            "total_local_files": 3,
+            "total_uploaded_files": 3,
+            "total_failed_upload": 0,
+            "failed_upload_files": [],
+            "uploaded_files": {
+                "file1.txt": "abc123",
+                "file2.txt": "def456",
+                "file3.txt": "ghi789",
+            },
+        }
+
+        self.assertDictEqual(written_log_contents, expected_log_contents)
+
+    def test_when_no_file_exists_for_partially_uploaded_run(self, mock_exists):
+        mock_exists.return_value = False
+        log_file = os.path.join(TEST_DATA_DIR, "test_run.upload.log.json")
+
+        utils.write_upload_state_to_log(
+            run_id="test_run",
+            run_path="/some/path/seq1/test_run",
+            log_file=log_file,
+            local_files=["file1.txt", "file2.txt", "file3.txt"],
+            uploaded_files={
+                "file1.txt": "abc123",
+                "file2.txt": "def456",
+            },
+            failed_files=["file3.txt"],
+        )
+
+        with open(log_file, "r") as fh:
+            written_log_contents = json.load(fh)
+
+        expected_log_contents = {
+            "run_id": "test_run",
+            "run path": "/some/path/seq1/test_run",
+            "completed": False,
+            "total_local_files": 3,
+            "total_uploaded_files": 2,
+            "total_failed_upload": 1,
+            "failed_upload_files": ["file3.txt"],
+            "uploaded_files": {"file1.txt": "abc123", "file2.txt": "def456"},
+        }
+
+        self.assertDictEqual(written_log_contents, expected_log_contents)
+
+    def test_when_log_file_exists_that_complete_run_data_is_merged_in(
+        self, mock_exists
+    ):
+        mock_exists.return_value = True
+        log_file = os.path.join(TEST_DATA_DIR, "test_run.upload.log.json")
+
+        # set up a log file from a previous partial upload with some
+        # failed file uploads
+        partial_run_contents = {
+            "run_id": "test_run",
+            "run path": "/some/path/seq1/test_run",
+            "completed": False,
+            "total_local_files": 3,
+            "total_uploaded_files": 2,
+            "total_failed_upload": 1,
+            "failed_upload_files": ["file3.txt"],
+            "uploaded_files": {"file1.txt": "abc123", "file2.txt": "def456"},
+        }
+
+        with open(log_file, "w") as fh:
+            json.dump(partial_run_contents, fh)
+
+        utils.write_upload_state_to_log(
+            run_id="test_run",
+            run_path="/some/path/seq1/test_run",
+            log_file=log_file,
+            local_files=["file1.txt", "file2.txt", "file3.txt"],
+            uploaded_files={
+                "file3.txt": "ghi789",
+            },
+            failed_files=[],
+        )
+
+        expected_contents = {
+            "run_id": "test_run",
+            "run path": "/some/path/seq1/test_run",
+            "completed": True,
+            "total_local_files": 3,
+            "total_uploaded_files": 3,
+            "total_failed_upload": 0,
+            "failed_upload_files": [],
+            "uploaded_files": {
+                "file1.txt": "abc123",
+                "file2.txt": "def456",
+                "file3.txt": "ghi789",
+            },
+        }
+
+        with open(log_file, "r") as fh:
+            written_log_contents = json.load(fh)
+
+        self.assertDictEqual(written_log_contents, expected_contents)
+
+    def test_when_log_file_exists_that_partially_complete_run_data_is_merged_in(
+        self, mock_exists
+    ):
+        """
+        Test when a previous partially uploaded run has written to the log,
+        and another upload attempt still does not upload all files that
+        the log is correctly updated but leaves the `completed` key as False
+        """
+        mock_exists.return_value = True
+        log_file = os.path.join(TEST_DATA_DIR, "test_run.upload.log.json")
+
+        # set up a log file from a previous partial upload with some
+        # failed file uploads
+        partial_run_contents = {
+            "run_id": "test_run",
+            "run path": "/some/path/seq1/test_run",
+            "completed": False,
+            "total_local_files": 3,
+            "total_uploaded_files": 1,
+            "total_failed_upload": 1,
+            "failed_upload_files": ["file2.txt", "file3.txt"],
+            "uploaded_files": {"file1.txt": "abc123"},
+        }
+
+        with open(log_file, "w") as fh:
+            json.dump(partial_run_contents, fh)
+
+        utils.write_upload_state_to_log(
+            run_id="test_run",
+            run_path="/some/path/seq1/test_run",
+            log_file=log_file,
+            local_files=["file1.txt", "file2.txt", "file3.txt"],
+            uploaded_files={
+                "file2.txt": "def456",
+            },
+            failed_files=["file3.txt"],
+        )
+
+        expected_contents = {
+            "run_id": "test_run",
+            "run path": "/some/path/seq1/test_run",
+            "completed": False,
+            "total_local_files": 3,
+            "total_uploaded_files": 2,
+            "total_failed_upload": 1,
+            "failed_upload_files": ["file3.txt"],
+            "uploaded_files": {
+                "file1.txt": "abc123",
+                "file2.txt": "def456",
+            },
+        }
+
+        with open(log_file, "r") as fh:
+            written_log_contents = json.load(fh)
+
+        self.assertDictEqual(written_log_contents, expected_contents)
 
 
 class TestVerifyArgs(unittest.TestCase):
