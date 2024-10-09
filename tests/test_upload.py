@@ -287,6 +287,57 @@ class TestMultiThreadUpload(unittest.TestCase):
             returned_uploaded_file_mapping,
         )
 
+    @patch("s3_upload.utils.upload.ThreadPoolExecutor")
+    def test_list_of_failed_files_returned_on_exception_raised_from_upload(
+        self, mock_pool, mock_as_completed, mock_client, mock_upload
+    ):
+        """
+        When one or more of the calls to upload.upload_single_file fails,
+        the file name that failed to upload should still be returned and
+        added to a list of files that fail to upload. We will then log
+        these to retry uploading on rerunning.
+        """
+        # mock one file uploading and 2 failing
+        mock_pool.return_value.submit.return_value = [
+            Future(),
+            Future(),
+            Future(),
+        ]
+        mock_pool.return_value.submit.return_value[0].set_result(
+            (
+                "/path/to/monitored_dir/run1/Samplesheet.csv",
+                "abc",
+            )
+        )
+        mock_pool.return_value.submit.return_value[1].set_exception(
+            s3_exceptions.ClientError(
+                {"Error": {"Code": 1, "Message": "foo"}}, "bar"
+            ),
+        )
+        mock_pool.return_value.submit.return_value[2].set_exception(
+            s3_exceptions.ClientError(
+                {"Error": {"Code": 1, "Message": "baz"}}, "blarg"
+            ),
+        )
+
+        submitted_concurrent_jobs = {
+            k: "a" for k in mock_pool.return_value.submit.return_value
+        }
+
+        mock_as_completed.call_args = submitted_concurrent_jobs
+
+        # mock_as_completed.return_value = (
+        #     mock_pool.return_value.submit.return_value
+        # )
+
+        returned_uploaded_file_mapping = upload.multi_thread_upload(
+            files=self.local_files,
+            bucket="test_bucket",
+            remote_path="/",
+            threads=4,
+            parent_path="/path/to/monitored_dir/",
+        )
+
 
 class TestMultiCoreUpload(unittest.TestCase):
 
