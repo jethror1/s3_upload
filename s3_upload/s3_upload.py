@@ -13,6 +13,8 @@ from utils.utils import (
     get_runs_to_upload,
     get_sequencing_file_list,
     read_config,
+    read_upload_state_log,
+    write_upload_state_to_log,
     split_file_list_by_cores,
 )
 from utils.log import get_logger
@@ -241,7 +243,7 @@ def monitor_directories_for_upload(config):
         files = get_sequencing_file_list(run_config["run_dir"])
         files = split_file_list_by_cores(files=files, n=cores)
 
-        multi_core_upload(
+        uploaded_files, failed_upload = multi_core_upload(
             files=files,
             bucket=run_config["bucket"],
             remote_path=run_config["remote_path"],
