@@ -6,7 +6,7 @@ import json
 from os import path, scandir, stat
 from pathlib import Path
 import re
-from typing import List
+from typing import List, Union
 
 from .log import get_logger
 
@@ -65,7 +65,7 @@ def check_is_sequencing_run_dir(run_dir) -> bool:
     return path.exists(path.join(run_dir, "RunInfo.xml"))
 
 
-def check_upload_state(sub_dir) -> str:
+def check_upload_state(sub_dir) -> Union[str, list]:
     """
     Checking upload state of run (i.e. uploaded, partial, new)
 
@@ -78,21 +78,24 @@ def check_upload_state(sub_dir) -> str:
     -------
     str
         state of run upload, will be one of: uploaded, partial or new
+    list
+        list of uploaded files
     """
     upload_log = path.join("/var/log/s3_upload/uploads/", Path(sub_dir).name)
 
     if not path.exists(upload_log):
-        return "new"
+        return "new", []
 
     log_contents = read_upload_state_log(log_file=upload_log)
+    uploaded_files = list(log_contents["uploaded_files"].keys())
 
     if log_contents["uploaded"]:
-        return "uploaded"
+        return "uploaded", uploaded_files
     else:
-        return "partial"
+        return "partial", uploaded_files
 
 
-def get_runs_to_upload(monitor_dirs) -> list:
+def get_runs_to_upload(monitor_dirs) -> Union[list, dict]:
     """
     Get completed sequencing runs to upload from specified directories
     to monitor
@@ -105,12 +108,13 @@ def get_runs_to_upload(monitor_dirs) -> list:
     Returns
     -------
     list
-        list of directories that are completed runs
-    list
-        list of directories that have been partially uploaded
+        list of directories that are completed runs not yet uploaded
+    dict
+        mapping of directories that have been partially uploaded and
+        the uploaded files
     """
     to_upload = []
-    partially_uploaded = []
+    partially_uploaded = {}
 
     for monitored_dir in monitor_dirs:
         # check each sub directory if it looks like a sequencing run,
@@ -140,7 +144,7 @@ def get_runs_to_upload(monitor_dirs) -> list:
                 )
                 continue
 
-            upload_state = check_upload_state(sub_dir)
+            upload_state, uploaded_files = check_upload_state(sub_dir)
 
             if upload_state == "uploaded":
                 log.info(
@@ -148,10 +152,12 @@ def get_runs_to_upload(monitor_dirs) -> list:
                 )
             elif upload_state == "partial":
                 log.info(
-                    "%s has partially uploaded, will continue uploading",
+                    "%s has partially uploaded (%s files), will continue"
+                    " uploading",
                     sub_dir,
+                    len(uploaded_files),
                 )
-                partially_uploaded.append(sub_dir)
+                partially_uploaded[sub_dir] = uploaded_files
             else:
                 log.info(
                     "%s has not started uploading, will be uploaded", sub_dir
@@ -205,6 +211,36 @@ def get_sequencing_file_list(seq_dir, exclude_patterns=None) -> list:
     log.info(f"{len(files)} files found to upload totalling %s", total_size)
 
     return [x[0] for x in files]
+
+
+def filter_uploaded_files(local_files, uploaded_files) -> list:
+    """
+    Remove already uploaded files from list of local files to upload
+
+    Parameters
+    ----------
+    local_files : list
+        list of local files to upload
+    uploaded_files : list
+        list of files already uploaded
+
+    Returns
+    -------
+    list
+        list of files not yet uploaded
+    """
+    log.info("removing already uploaded files from local file list")
+    log.debug(
+        "total local files: %s | total uploaded files: %s",
+        len(local_files),
+        len(uploaded_files),
+    )
+
+    uploadable_files = list(set(local_files) - set(uploaded_files))
+
+    log.debug("%s local files left to upload", len(uploadable_files))
+
+    return uploadable_files
 
 
 def split_file_list_by_cores(files, n) -> List[List[str]]:
@@ -301,6 +337,19 @@ def write_upload_state_to_log(
     If the uploaded files matches the local files with no failed uploads,
     the run is marked as complete uploaded. This is then used for future
     monitoring to know not to attempt re-upload.
+
+    Log file will have the following structure:
+
+    {
+        "run_id": run_id,           -> ID of sequencing run
+        "run path": run_path,       -> full local path to the run dir
+        "completed": False,         -> if all files have uploaded
+        "total_local_files": ,      -> total count of local files to upload
+        "total_uploaded_files": 0,  -> total files already uploaded
+        "total_failed_upload": 0,   -> total files failed to upload
+        "failed_upload_files": [],  -> list of files previously failed upload
+        "uploaded_files": {},       -> mapping of uploaded files to object ID
+    }
 
     Parameters
     ----------
