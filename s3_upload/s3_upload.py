@@ -12,8 +12,8 @@ from .utils.utils import (
     check_termination_file_exists,
     get_runs_to_upload,
     get_sequencing_file_list,
+    filter_uploaded_files,
     read_config,
-    read_upload_state_log,
     write_upload_state_to_log,
     split_file_list_by_cores,
     verify_args,
@@ -151,10 +151,13 @@ def monitor_directories_for_upload(config):
     threads = config.get("max_threads", 4)
 
     to_upload = []
+    partially_uploaded = []
 
     # find all the runs to upload in the specified monitored directories
     for monitor_dir_config in config["monitor"]:
-        completed_runs = get_runs_to_upload(monitor_dir_config)
+        completed_runs, partially_uploaded = get_runs_to_upload(
+            monitor_dir_config["monitored_directories"]
+        )
 
         to_upload.extend(
             [
@@ -168,21 +171,53 @@ def monitor_directories_for_upload(config):
             ]
         )
 
+        for partial_run, uploaded_files in partially_uploaded.items():
+            partially_uploaded.append(
+                {
+                    "run_dir": partial_run,
+                    "parent_path": Path(partial_run).parent,
+                    "bucket": monitor_dir_config["bucket"],
+                    "remote_path": monitor_dir_config["remote_path"],
+                    "uploaded_files": uploaded_files,
+                }
+            )
+
     log.info(
-        "Found %s sequencing runs to upload: %s",
+        "Found %s new sequencing runs to upload: %s",
         len(to_upload),
         ", ".join([Path(x["run_dir"]).name for x in to_upload]),
     )
+    if partially_uploaded:
+        log.info(
+            "Found %s partially uploaded runs to continue uploading: %s",
+            len(partially_uploaded),
+            ", ".join([Path(x["run_dir"]).name for x in partially_uploaded]),
+        )
+
+        # preferentially upload partial runs first
+        to_upload = partially_uploaded + to_upload
 
     for run_config in to_upload:
         # begin uploading of each sequencing run
         files = get_sequencing_file_list(run_config["run_dir"])
+
+        if run_config.get("uploaded_files"):
+            files = filter_uploaded_files(
+                local_files=files,
+                uploaded_files=run_config.get("uploaded_files"),
+            )
+
         files = split_file_list_by_cores(files=files, n=cores)
+
         run_log_file = (
             f"/var/log/s3_upload/uploads/{run_config['run_id']}."
             "upload.log.json"
         )
 
+        # call the actual upload, any errors being raised that result in
+        # files not being uploaded should be returned and will result in
+        # upload state log storing the run as not complete, allowing for
+        # retries on uploading
         uploaded_files, failed_upload = multi_core_upload(
             files=files,
             bucket=run_config["bucket"],
