@@ -190,7 +190,7 @@ class TestGetRunsToUpload(unittest.TestCase):
             )
             open(test_file, "w").close()
 
-        returned_upload_dirs = utils.get_runs_to_upload(
+        returned_upload_dirs, _ = utils.get_runs_to_upload(
             monitor_dirs=[
                 os.path.join(TEST_DATA_DIR, "seq1"),
                 os.path.join(TEST_DATA_DIR, "seq2"),
@@ -366,14 +366,14 @@ class TestGetSequencingFileList(unittest.TestCase):
 
 class TestFilterUploadedFiles(unittest.TestCase):
     def test_correct_file_list_returned(self):
-        local_files = ['file1.txt', 'file2.txt', 'file3.txt']
-        uploaded_files = ['file1.txt', 'file2.txt']
+        local_files = ["file1.txt", "file2.txt", "file3.txt"]
+        uploaded_files = ["file1.txt", "file2.txt"]
 
         to_upload = utils.filter_uploaded_files(
             local_files=local_files, uploaded_files=uploaded_files
         )
 
-        self.assertEqual(to_upload, ['file3.txt'])
+        self.assertEqual(to_upload, ["file3.txt"])
 
 
 class TestSplitFileListByCores(unittest.TestCase):
