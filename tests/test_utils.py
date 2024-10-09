@@ -1,9 +1,12 @@
 import os
+from pathlib import Path
+import re
 from shutil import rmtree
 import unittest
 
-from tests import TEST_DATA_DIR
+import pytest
 
+from tests import TEST_DATA_DIR
 from s3_upload.utils import utils
 
 
@@ -91,8 +94,50 @@ class TestCheckIsSequencingRunDir(unittest.TestCase):
 
 
 class TestGetRunsToUpload(unittest.TestCase):
-    # TODO -  add unit tests
-    pass
+    def test_uploadable_directories_correctly_returned(self):
+        test_run_dir_structure = [
+            # valid incomplete NovaSeq run -> not to upload
+            "seq1/run1/RunInfo.xml",
+            # valid complete NovaSeq run -> upload
+            "seq1/run2/RunInfo.xml",
+            "seq1/run2/CopyComplete.txt",
+            # valid complete other sequencer run -> upload
+            "seq2/run3/RunInfo.xml",
+            "seq2/run3/RTAComplete.txt",
+            # other non run directory -> not to upload
+            "seq2/some_dir/file1.txt",
+        ]
+
+        test_run_dir_structure = [
+            os.path.join(TEST_DATA_DIR, x) for x in test_run_dir_structure
+        ]
+
+        # create the test files and dir structure
+        for test_file in test_run_dir_structure:
+            os.makedirs(
+                Path(test_file).parent,
+                exist_ok=True,
+            )
+            open(test_file, "w").close()
+
+        returned_upload_dirs = utils.get_runs_to_upload(
+            monitor_dirs=[
+                os.path.join(TEST_DATA_DIR, "seq1"),
+                os.path.join(TEST_DATA_DIR, "seq2"),
+            ]
+        )
+
+        valid_upload_dirs = [
+            os.path.join(TEST_DATA_DIR, "seq1/run2"),
+            os.path.join(TEST_DATA_DIR, "seq2/run3"),
+        ]
+
+        with self.subTest():
+            self.assertEqual(valid_upload_dirs, returned_upload_dirs)
+
+        # clear out the created test directories
+        rmtree(os.path.join(TEST_DATA_DIR, "seq1"))
+        rmtree(os.path.join(TEST_DATA_DIR, "seq2"))
 
 
 class TestGetSequencingFileList(unittest.TestCase):
@@ -314,6 +359,87 @@ class TestParseConfig(unittest.TestCase):
         self.assertEqual(expected_contents, config_contents)
 
 
+class TestVerifyArgs(unittest.TestCase):
+    # TODO - add tests
+    pass
+
+
+class TestVerifyConfig(unittest.TestCase):
+    def test_valid_config_passes(self):
+        valid_config = {
+            "max_cores": 4,
+            "max_threads": 8,
+            "log_level": "INFO",
+            "log_dir": "/var/log/s3_upload",
+            "monitor": [
+                {
+                    "monitored_directories": [
+                        "/absolute/path/to/sequencer_1",
+                        "/absolute/path/to/sequencer_2",
+                    ],
+                    "bucket": "bucket_A",
+                    "remote_path": "/",
+                },
+                {
+                    "monitored_directories": [
+                        "/absolute/path/to/sequencer_3",
+                    ],
+                    "bucket": "bucket_B",
+                    "remote_path": "/sequencer_3_runs",
+                },
+            ],
+        }
+
+        utils.verify_config(valid_config)
+
+    def test_invalid_config_raises_runtime_error_with_expected_errors(self):
+        invalid_config = {
+            "max_cores": "4",
+            "max_threads": "8",
+            "log_level": "INFO",
+            "monitor": [
+                {
+                    "bucket": "bucket_A",
+                },
+                {
+                    "monitored_directories": [
+                        "/absolute/path/to/sequencer_3",
+                    ],
+                    "bucket": 1,
+                    "remote_path": "/sequencer_3_runs",
+                },
+            ],
+        }
+
+        expected_errors = (
+            "6 errors found in config:\n\tmax_cores must be an"
+            " integer\n\tmax_threads must be an integer\n\trequired parameter"
+            " log_dir not defined\n\trequired parameter monitored_directories"
+            " missing from monitor section 0\n\trequired parameter remote_path"
+            " missing from monitor section 0\n\tbucket not of expected type"
+            " from monitor section 1. Expected: <class 'str'> | Found <class"
+            " 'int'>"
+        )
+
+        with pytest.raises(RuntimeError, match=re.escape(expected_errors)):
+            utils.verify_config(invalid_config)
+
+    def test_missing_monitor_section_raises_runtime_error(self):
+        invalid_config = {
+            "max_cores": 4,
+            "max_threads": 8,
+            "log_dir": "/var/log/s3_upload",
+        }
+
+        expected_error = (
+            "1 errors found in config:\n\trequired parameter monitor not"
+            " defined"
+        )
+
+        with pytest.raises(RuntimeError, match=re.escape(expected_error)):
+            utils.verify_config(invalid_config)
+
+
 class TestSizeofFmt(unittest.TestCase):
     def test_expected_value_and_suffix_returned(self):
         bytes_to_formatted = [
@@ -327,6 +453,7 @@ class TestSizeofFmt(unittest.TestCase):
             (11223344556677, "10.21TB"),
             (112233445566778899, "99.68PB"),
             (11223344556677889900, "9.73EB"),
+            (111222333444555666777888999, "92.00YiB"),
         ]
 
         for byte in bytes_to_formatted:

@@ -87,14 +87,20 @@ def get_runs_to_upload(monitor_dirs) -> list:
         # sequencing run
         # TODO - this needs to also check against local log files
         log.info("Checking %s for completed sequencing runs", monitored_dir)
+
         sub_directories = [
             f.path for f in scandir(monitored_dir) if f.is_dir()
         ]
+
+        log.debug(
+            "directories found in %s: %s", monitored_dir, sub_directories
+        )
 
         for sub_dir in sub_directories:
             if check_is_sequencing_run_dir(
                 sub_dir
             ) and check_termination_file_exists(sub_dir):
+                log.debug("%s is a completed sequencing run", sub_dir)
                 to_upload.append(sub_dir)
 
     return to_upload
@@ -324,6 +330,75 @@ def write_upload_state_to_log(
         log_data["completed"] = True
 
     return log_data
+
+
+def verify_args(args) -> None:
+    """
+    Verify that the provided args are valid
+
+    Parameters
+    ----------
+    args : argparse.NameSpace
+        parsed command line arguments
+    """
+    # TODO - complete this once I decide on all args to have
+    pass
+
+
+def verify_config(config) -> None:
+    """
+    Verify that config structure and parameters are valid
+
+    Parameters
+    ----------
+    config : dict
+        contents of config file to check
+    """
+    log.debug(
+        "Verifying contents of config are valid, contents parsed: %s", config
+    )
+    errors = []
+
+    if not isinstance(config.get("max_cores", 0), int):
+        errors.append("max_cores must be an integer")
+
+    if not isinstance(config.get("max_threads", 0), int):
+        errors.append("max_threads must be an integer")
+
+    if not config.get("log_dir"):
+        errors.append("required parameter log_dir not defined")
+
+    if not config.get("monitor"):
+        errors.append("required parameter monitor not defined")
+
+    for idx, monitor in enumerate(config.get("monitor", "")):
+        for key, expected_type in {
+            "monitored_directories": list,
+            "bucket": str,
+            "remote_path": str,
+        }.items():
+            if not monitor.get(key):
+                errors.append(
+                    f"required parameter {key} missing from monitor section"
+                    f" {idx}"
+                )
+            else:
+                if not isinstance(monitor.get(key), expected_type):
+                    errors.append(
+                        f"{key} not of expected type from monitor section "
+                        f"{idx}. Expected: {expected_type} | Found "
+                        f"{type(monitor.get(key))}"
+                    )
+
+    if errors:
+        error_message = (
+            f"{len(errors)} errors found in config:{chr(10)}{chr(9)}"
+            f"{f'{chr(10)}{chr(9)}'.join(errors)}"
+        )
+        log.error(error_message)
+        raise RuntimeError(error_message)
+    else:
+        log.debug("Config valid")
 
 
 def sizeof_fmt(num) -> str:
