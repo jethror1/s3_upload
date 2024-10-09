@@ -2,12 +2,12 @@ import argparse
 from os import cpu_count
 from pathlib import Path
 
-from utils.upload import (
+from .utils.upload import (
     check_aws_access,
     check_buckets_exist,
     multi_core_upload,
 )
-from utils.utils import (
+from .utils.utils import (
     check_is_sequencing_run_dir,
     check_termination_file_exists,
     get_runs_to_upload,
@@ -19,7 +19,7 @@ from utils.utils import (
     verify_args,
     verify_config,
 )
-from utils.log import get_logger
+from .utils.log import get_logger
 
 
 log = get_logger("s3 upload")
@@ -110,9 +110,9 @@ def upload_single_run(args):
         args.local_path
     ) or not check_termination_file_exists(args.local_path):
         log.error(
-            f"Provided directory: {args.local_path} does not appear to be"
-            " a complete sequencing run. Please check the provided path"
-            " and try again."
+            "Provided directory: %s does not appear to be a complete "
+            "sequencing run. Please check the provided path and try again.",
+            args.local_path,
         )
         exit()
 
@@ -169,14 +169,19 @@ def monitor_directories_for_upload(config):
         )
 
     log.info(
-        f"Found {len(to_upload)} sequencing runs to upload:"
-        f" {', '.join([Path(x['run_dir']).name for x in to_upload])}"
+        "Found %s sequencing runs to upload: %s",
+        len(to_upload),
+        ", ".join([Path(x["run_dir"]).name for x in to_upload]),
     )
 
     for run_config in to_upload:
         # begin uploading of each sequencing run
         files = get_sequencing_file_list(run_config["run_dir"])
         files = split_file_list_by_cores(files=files, n=cores)
+        run_log_file = (
+            f"/var/log/s3_upload/uploads/{run_config['run_id']}."
+            "upload.log.json"
+        )
 
         uploaded_files, failed_upload = multi_core_upload(
             files=files,
@@ -185,6 +190,15 @@ def monitor_directories_for_upload(config):
             cores=cores,
             threads=threads,
             parent_path=run_config["parent_path"],
+        )
+
+        write_upload_state_to_log(
+            run_id=Path(run_config["run_id"]),
+            run_path=run_config["run_dir"],
+            log_file=run_log_file,
+            local_files=[x for y in files for x in y],
+            uploaded_files=uploaded_files,
+            failed_files=failed_upload,
         )
 
 
