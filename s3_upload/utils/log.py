@@ -24,6 +24,35 @@ def get_file_handler(log_file):
     return file_handler
 
 
+def check_write_permission_to_log_dir(log_dir) -> None:
+    """
+    Check that the given log dir, or highest parent dir that exists, is
+    writable
+
+    Parameters
+    ----------
+    log_dir : str
+        path to log dir
+
+    Raises
+    ------
+    PermissionError
+        Raised if path supplied is not writable
+    """
+    while log_dir:
+        if not os.path.exists(log_dir):
+            log_dir = Path(log_dir).parent
+            continue
+
+        if not os.access(log_dir, os.W_OK):
+            raise PermissionError(
+                f"Path to provided log directory {log_dir} does not appear to"
+                " have write permission for current user"
+            )
+        else:
+            break
+
+
 def get_logger(
     logger_name, log_level=logging.INFO, log_dir="/var/log/s3_upload"
 ) -> logging.Logger:
@@ -54,11 +83,7 @@ def get_logger(
         # logger already exists => use it
         return logging.getLogger(logger_name)
 
-    if os.path.exists(log_dir):
-        assert os.access(log_dir, os.W_OK), (
-            f"given log directory {log_dir} does not appear to have write"
-            " permission"
-        )
+    check_write_permission_to_log_dir(log_dir)
 
     log_file = os.path.join(log_dir, "s3_upload.log")
 
