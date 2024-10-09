@@ -103,7 +103,7 @@ class TestReadUploadStateLog(unittest.TestCase):
     ):
         mock_exists.return_value = False
 
-        upload_state = utils.check_upload_state(
+        upload_state, uploaded_files = utils.check_upload_state(
             sub_dir="/some/path/to/test_run"
         )
 
@@ -115,6 +115,9 @@ class TestReadUploadStateLog(unittest.TestCase):
         with self.subTest("correct string returned"):
             self.assertEqual(upload_state, "new")
 
+        with self.subTest("empty file list returned"):
+            self.assertEqual(uploaded_files, [])
+
     def test_uploaded_returned_for_run_that_has_uploaded(
         self, mock_log, mock_exists
     ):
@@ -124,13 +127,18 @@ class TestReadUploadStateLog(unittest.TestCase):
             "run_id": "test_run",
             "run_path": "/some/path/to/test_run",
             "uploaded": True,
+            "uploaded_files": {"file1.txt": "abc123", "file2.txt": "def456"},
         }
 
-        upload_state = utils.check_upload_state(
+        upload_state, uploaded_files = utils.check_upload_state(
             sub_dir="/some/path/to/test_run"
         )
 
-        self.assertEqual(upload_state, "uploaded")
+        with self.subTest("uploaded run correctly returned"):
+            self.assertEqual(upload_state, "uploaded")
+
+        with self.subTest("correct file list returned"):
+            self.assertEqual(uploaded_files, ["file1.txt", "file2.txt"])
 
     def test_partial_returned_for_run_that_has_not_fully_uploaded(
         self, mock_log, mock_exists
@@ -141,13 +149,18 @@ class TestReadUploadStateLog(unittest.TestCase):
             "run_id": "test_run",
             "run_path": "/some/path/to/test_run",
             "uploaded": False,
+            "uploaded_files": {"file1.txt": "abc123", "file2.txt": "def456"},
         }
 
-        upload_state = utils.check_upload_state(
+        upload_state, uploaded_files = utils.check_upload_state(
             sub_dir="/some/path/to/test_run"
         )
 
-        self.assertEqual(upload_state, "partial")
+        with self.subTest("partial correctly returned"):
+            self.assertEqual(upload_state, "partial")
+
+        with self.subTest("correct file list returned"):
+            self.assertEqual(uploaded_files, ["file1.txt", "file2.txt"])
 
 
 class TestGetRunsToUpload(unittest.TestCase):
