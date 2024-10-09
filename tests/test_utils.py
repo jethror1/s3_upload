@@ -95,6 +95,61 @@ class TestCheckIsSequencingRunDir(unittest.TestCase):
         os.remove(run_info_xml)
 
 
+@patch("s3_upload.utils.utils.path.exists")
+@patch("s3_upload.utils.utils.read_upload_state_log")
+class TestReadUploadStateLog(unittest.TestCase):
+    def test_new_returned_when_upload_log_does_not_exist(
+        self, mock_log, mock_exists
+    ):
+        mock_exists.return_value = False
+
+        upload_state = utils.check_upload_state(
+            sub_dir="/some/path/to/test_run"
+        )
+
+        with self.subTest("correct path provided to check exists"):
+            expected_log_path = "/var/log/s3_upload/uploads/test_run"
+
+            self.assertEqual(expected_log_path, mock_exists.call_args[0][0])
+
+        with self.subTest("correct string returned"):
+            self.assertEqual(upload_state, "new")
+
+    def test_uploaded_returned_for_run_that_has_uploaded(
+        self, mock_log, mock_exists
+    ):
+        mock_exists.return_value = True
+
+        mock_log.return_value = {
+            "run_id": "test_run",
+            "run_path": "/some/path/to/test_run",
+            "uploaded": True,
+        }
+
+        upload_state = utils.check_upload_state(
+            sub_dir="/some/path/to/test_run"
+        )
+
+        self.assertEqual(upload_state, "uploaded")
+
+    def test_partial_returned_for_run_that_has_not_fully_uploaded(
+        self, mock_log, mock_exists
+    ):
+        mock_exists.return_value = True
+
+        mock_log.return_value = {
+            "run_id": "test_run",
+            "run_path": "/some/path/to/test_run",
+            "uploaded": False,
+        }
+
+        upload_state = utils.check_upload_state(
+            sub_dir="/some/path/to/test_run"
+        )
+
+        self.assertEqual(upload_state, "partial")
+
+
 class TestGetRunsToUpload(unittest.TestCase):
     def test_uploadable_directories_correctly_returned(self):
         test_run_dir_structure = [
@@ -359,10 +414,6 @@ class TestParseConfig(unittest.TestCase):
         }
 
         self.assertEqual(expected_contents, config_contents)
-
-
-class TestReadUploadStateLog(unittest.TestCase):
-    pass
 
 
 @patch("s3_upload.utils.utils.path.exists")

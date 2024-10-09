@@ -65,6 +65,33 @@ def check_is_sequencing_run_dir(run_dir) -> bool:
     return path.exists(path.join(run_dir, "RunInfo.xml"))
 
 
+def check_upload_state(sub_dir) -> str:
+    """
+    Checking upload state of run (i.e. uploaded, partial, new)
+
+    Parameters
+    ----------
+    sub_dir : str
+        name of directory to check upload state
+
+    Returns
+    -------
+    str
+        state of run upload, will be one of: uploaded, partial or new
+    """
+    upload_log = path.join("/var/log/s3_upload/uploads/", Path(sub_dir).name)
+
+    if not path.exists(upload_log):
+        return "new"
+
+    log_contents = read_upload_state_log(log_file=upload_log)
+
+    if log_contents["uploaded"]:
+        return "uploaded"
+    else:
+        return "partial"
+
+
 def get_runs_to_upload(monitor_dirs) -> list:
     """
     Get completed sequencing runs to upload from specified directories
@@ -132,33 +159,6 @@ def get_runs_to_upload(monitor_dirs) -> list:
                 to_upload.append(sub_dir)
 
     return to_upload, partially_uploaded
-
-
-def check_upload_state(sub_dir) -> str:
-    """
-    Checking upload state of run (i.e. uploaded, partial, new)
-
-    Parameters
-    ----------
-    sub_dir : str
-        name of directory to check upload state
-
-    Returns
-    -------
-    str
-        state of run upload, will be one of: uploaded, partial or new
-    """
-    upload_log = path.join("/var/log/s3_upload/uploads/", Path(sub_dir).name)
-
-    if not path.exists(upload_log):
-        return "new"
-
-    log_contents = read_upload_state_log(log_file=upload_log)
-
-    if log_contents["uploaded"]:
-        return "uploaded"
-    else:
-        return "partial"
 
 
 def get_sequencing_file_list(seq_dir, exclude_patterns=None) -> list:
