@@ -137,12 +137,60 @@ def upload_single_file(
     return local_file, remote_object.get("ETag", "").strip('"')
 
 
+def _submit_to_pool(pool, func, item_input, items, **kwargs):
+    """
+    Submits one call to `func` in `pool` (either ThreadPoolExecutor or
+    ProcessPoolExecutor) for each item in `items`. All additional
+    arguments defined in `kwargs` are passed to the given function.
+
+    This has been abstracted from both multi_thread_upload and
+    multi_core_upload to allow for unit testing of the called function
+    raising exceptions, which I could not figure out with the
+    ProcessPool submit calls being local to both functions.
+
+    In this context we will be calling upload_single_file() once for
+    each of files in the given list of files, passing through the S3
+    bucket and paths for uploading.
+
+    Parameters
+    ----------
+    pool : ThreadPoolExecutor | ProcessPoolExecutor
+        concurrent.futures executor to submit calls to
+    func : callable
+        function to call on submitting
+    item_input : str
+        function input field to submit each items of `items` to
+    items : iterable
+        iterable of object to submit
+
+    Returns
+    -------
+    dict
+        mapping of concurrent.futures.Future objects to the original
+        `item` submitted for that future
+    """
+    return {
+        pool.submit(
+            func,
+            **{**{item_input: item}, **kwargs},
+        ): item
+        for item in items
+    }
+
+
 def multi_thread_upload(
     files, bucket, remote_path, threads, parent_path
 ) -> Union[dict, list]:
     """
     Uploads the given set of `files` to S3 on a single CPU core using
-    maximum of n threads
+    maximum of n threads.
+
+    We are defining one S3 client per core due to boto3 clients being thread
+    safe but not safe to share across processes due to expected response
+    ordering: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/clients.html#caveat
+
+    We will also set `disable_request_compression` since the majority of run
+    data will not compress and this reduces unneeded CPU and memory load.
 
     Parameters
     ----------
@@ -166,11 +214,6 @@ def multi_thread_upload(
     """
     log.info("Uploading %s with %s threads", len(files), threads)
 
-    # defining one S3 client per core due to boto3 clients being thread
-    # safe but not safe to share across processes due to expected response
-    # ordering: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/clients.html#caveats
-    # disable_request_compression set since the majority of run data will
-    # not compress and this reduces unneeded CPU and memory load
     session = boto3.session.Session()
     s3_client = session.client(
         "s3",
@@ -184,17 +227,16 @@ def multi_thread_upload(
     failed_upload = []
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        concurrent_jobs = {
-            executor.submit(
-                upload_single_file,
-                s3_client=s3_client,
-                bucket=bucket,
-                remote_path=remote_path,
-                local_file=item,
-                parent_path=parent_path,
-            ): item
-            for item in files
-        }
+        concurrent_jobs = _submit_to_pool(
+            pool=executor,
+            func=upload_single_file,
+            item_input="local_file",
+            items=files,
+            s3_client=s3_client,
+            bucket=bucket,
+            remote_path=remote_path,
+            parent_path=parent_path,
+        )
 
         for future in as_completed(concurrent_jobs):
             # access returned output as each is returned in any order
