@@ -5,7 +5,6 @@ COPY requirements.txt requirements.txt
 # - Install requirements
 # - Delete unnecessary Python files
 # - Alias command `s3_upload` to `python3 s3_upload.py` for convenience
-
 RUN \
     pip install --quiet --upgrade pip && \
     pip install -r requirements.txt && \
