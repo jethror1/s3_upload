@@ -17,6 +17,7 @@ def get_console_handler():
 
 
 def set_file_handler(logger, log_file) -> None:
+    print(log_file)
     check_write_permission_to_log_dir(Path(log_file).parent)
 
     file_handler = TimedRotatingFileHandler(
@@ -57,6 +58,8 @@ def check_write_permission_to_log_dir(log_dir) -> None:
         Raised if path supplied is not writable
     """
     while log_dir:
+        print("foo")
+        print(log_dir)
         if not os.path.exists(log_dir):
             log_dir = Path(log_dir).parent
             continue
