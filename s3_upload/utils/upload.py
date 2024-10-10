@@ -123,13 +123,11 @@ def upload_single_file(
     # this better from the config
     config = TransferConfig(multipart_threshold=1024**3, use_threads=False)
     s3_client.upload_file(
-        filename=local_file,
-        bucket=bucket,
-        key=upload_file,
+        Filename=local_file,
+        Bucket=bucket,
+        Key=upload_file,
         Config=config,
     )
-
-    # s3_client.upload_file(local_file, bucket, upload_file, Config=config)
 
     # ensure we can access the remote file to log the object ID
     remote_object = s3_client.get_object(Bucket=bucket, Key=upload_file)
