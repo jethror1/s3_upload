@@ -320,43 +320,41 @@ class TestMultiThreadUpload(unittest.TestCase):
         """
         # mock one file uploading and 2 failing being returned as the result
         # from each future in the pool
-        mock_pool.return_value.submit.return_value = [
+        submitted_futures = [
             Future(),
             Future(),
             Future(),
         ]
-        mock_pool.return_value.submit.return_value[0].set_result(
+        submitted_futures[0].set_result(
             (
                 "/path/to/monitored_dir/run1/file1.txt",
                 "abc",
             )
         )
-        mock_pool.return_value.submit.return_value[1].set_exception(
+        submitted_futures[1].set_exception(
             s3_exceptions.ClientError(
                 {"Error": {"Code": 1, "Message": "foo"}}, "bar"
             ),
         )
-        mock_pool.return_value.submit.return_value[2].set_exception(
+        submitted_futures[2].set_exception(
             s3_exceptions.ClientError(
                 {"Error": {"Code": 1, "Message": "baz"}}, "blarg"
             ),
         )
 
-        # mock the response of all submitted futures to the pool, this
-        # returns a dict mapping the future to the submitted input (i.e
-        # the file), allowing us to access the file of any that the future
-        # raises an error from
+        # mock the response of all submitted futures to the pool from
+        # _submit_to_pool, this returns a dict mapping the future to the
+        # submitted input (i.e the file), allowing us to access the file
+        # of any that the future raises an error from
         mock_submit.return_value = {
             future: input_file
             for future, input_file in zip(
-                mock_pool.return_value.submit.return_value,
+                submitted_futures,
                 ["file1.txt", "file2.txt", "file3.txt"],
             )
         }
 
-        mock_as_completed.return_value = (
-            mock_pool.return_value.submit.return_value
-        )
+        mock_as_completed.return_value = mock_submit.return_value
 
         uploaded_files, failed_files = upload.multi_thread_upload(
             files=self.local_files,
@@ -400,23 +398,43 @@ class TestMultiCoreUpload(unittest.TestCase):
                 self.assertEqual(mock_pool.call_args[1]["max_workers"], core)
 
     @patch("s3_upload.utils.upload.as_completed")
+    @patch("s3_upload.utils.upload._submit_to_pool")
     @patch("s3_upload.utils.upload.ProcessPoolExecutor")
-    def test_returned_file_mapping_correct(self, mock_pool, mock_completed):
+    def test_returned_file_mapping_correct_for_all_successfully_uploading(
+        self, mock_pool, mock_submit, mock_completed
+    ):
         # each ProcessPool should return a dict mapping from each ThreadPool
         # of local file to remote object ID, these should then be finally
         # merged and returned as a single level dict
-        mock_completed.return_value = [Future(), Future(), Future()]
+        submitted_futures = [Future(), Future(), Future()]
+
+        # set futures and their response for return of as_completed()
+        mock_completed.return_value = submitted_futures
 
         return_values = [
-            {"/path/to/monitored_dir/run1/Samplesheet.csv": "abc"},
-            {"/path/to/monitored_dir/run1/RunInfo.xml": "def"},
-            {"/path/to/monitored_dir/run1/CopyComplete.txt": "ghi"},
+            ({"/path/to/monitored_dir/run1/Samplesheet.csv": "abc"}, []),
+            ({"/path/to/monitored_dir/run1/RunInfo.xml": "def"}, []),
+            ({"/path/to/monitored_dir/run1/CopyComplete.txt": "ghi"}, []),
         ]
 
         for i, j in zip(mock_completed.return_value, return_values):
             i.set_result(j)
 
-        returned_uploaded_file_mapping = upload.multi_core_upload(
+        # set the response of the _submit_to_pool to be the dict mapping
+        # the futures to input file lists
+        mock_submit.return_value = {
+            future: input_file
+            for future, input_file in zip(
+                submitted_futures,
+                [
+                    ["/path/to/monitored_dir/run1/Samplesheet.csv"],
+                    ["/path/to/monitored_dir/run1/RunInfo.xml"],
+                    ["/path/to/monitored_dir/run1/CopyComplete.txt"],
+                ],
+            )
+        }
+
+        uploaded_files, failed_files = upload.multi_core_upload(
             files=self.local_files,
             bucket="test_bucket",
             remote_path="/",
@@ -431,7 +449,76 @@ class TestMultiCoreUpload(unittest.TestCase):
             "/path/to/monitored_dir/run1/CopyComplete.txt": "ghi",
         }
 
-        self.assertEqual(
-            expected_local_file_to_remote_id_mapping,
-            returned_uploaded_file_mapping,
+        with self.subTest("all files uploaded"):
+            self.assertEqual(
+                expected_local_file_to_remote_id_mapping,
+                uploaded_files,
+            )
+
+        with self.subTest("no failed uploads"):
+            self.assertEqual(failed_files, [])
+
+    @patch("s3_upload.utils.upload.as_completed")
+    @patch("s3_upload.utils.upload._submit_to_pool")
+    @patch("s3_upload.utils.upload.ProcessPoolExecutor")
+    def test_returned_file_mapping_correct_for_failed_uploads(
+        self, mock_pool, mock_submit, mock_completed
+    ):
+        # each ProcessPool should return a dict mapping from each ThreadPool
+        # of local file to remote object ID, these should then be finally
+        # merged and returned as a single level dict
+        submitted_futures = [Future(), Future(), Future()]
+
+        # set futures and their response for return of as_completed(),
+        # include 2 successful uploads and one fail
+        mock_completed.return_value = submitted_futures
+
+        return_values = [
+            ({"/path/to/monitored_dir/run1/Samplesheet.csv": "abc"}, []),
+            ({"/path/to/monitored_dir/run1/RunInfo.xml": "def"}, []),
+            ({}, ["/path/to/monitored_dir/run1/CopyComplete.txt"]),
+        ]
+
+        for i, j in zip(mock_completed.return_value, return_values):
+            i.set_result(j)
+
+        # set the response of the _submit_to_pool to be the dict mapping
+        # the futures to input file lists
+        mock_submit.return_value = {
+            future: input_file
+            for future, input_file in zip(
+                submitted_futures,
+                [
+                    ["/path/to/monitored_dir/run1/Samplesheet.csv"],
+                    ["/path/to/monitored_dir/run1/RunInfo.xml"],
+                    ["/path/to/monitored_dir/run1/CopyComplete.txt"],
+                ],
+            )
+        }
+
+        uploaded_files, failed_files = upload.multi_core_upload(
+            files=self.local_files,
+            bucket="test_bucket",
+            remote_path="/",
+            cores=3,
+            threads=1,
+            parent_path="/path/to/monitored_dir/",
         )
+
+        expected_uploaded_files = {
+            "/path/to/monitored_dir/run1/Samplesheet.csv": "abc",
+            "/path/to/monitored_dir/run1/RunInfo.xml": "def",
+        }
+
+        expected_failed_files = [
+            "/path/to/monitored_dir/run1/CopyComplete.txt"
+        ]
+
+        with self.subTest("all files uploaded"):
+            self.assertEqual(
+                expected_uploaded_files,
+                uploaded_files,
+            )
+
+        with self.subTest("no failed uploads"):
+            self.assertEqual(failed_files, expected_failed_files)
