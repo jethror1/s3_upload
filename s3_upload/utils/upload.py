@@ -7,7 +7,7 @@ from concurrent.futures import (
 )
 from os import path
 import re
-from typing import List
+from typing import Dict, List, Tuple
 
 import boto3
 from boto3.s3.transfer import TransferConfig
@@ -61,7 +61,7 @@ def check_buckets_exist(*buckets) -> List[dict]:
     RuntimeError
         Raised when one or more buckets do not exist / not accessible
     """
-    log.info("Checking bucket(s) %s exist", buckets)
+    log.info("Checking bucket(s) exist and accessible: %s", ", ".join(buckets))
 
     valid = []
     invalid = []
@@ -123,9 +123,9 @@ def upload_single_file(
     # this better from the config
     config = TransferConfig(multipart_threshold=1024**3, use_threads=False)
     s3_client.upload_file(
-        file_name=local_file,
-        bucket=bucket,
-        object_name=upload_file,
+        Filename=local_file,
+        Bucket=bucket,
+        Key=upload_file,
         Config=config,
     )
 
@@ -134,15 +134,62 @@ def upload_single_file(
 
     log.debug("%s uploaded as %s", local_file, remote_object.get("ETag"))
 
-    return local_file, remote_object.get("ETag").strip('"')
+    return local_file, remote_object.get("ETag", "").strip('"')
+
+
+def _submit_to_pool(pool, func, item_input, items, **kwargs):
+    """
+    Submits one call to `func` in `pool` (either ThreadPoolExecutor or
+    ProcessPoolExecutor) for each item in `items`. All additional
+    arguments defined in `kwargs` are passed to the given function.
+
+    This has been abstracted from both multi_thread_upload and
+    multi_core_upload to allow for unit testing of the called function
+    raising exceptions that are caught and handled.
+
+    In this context we will be calling upload_single_file() once for
+    each of files in the given list of files, passing through the S3
+    bucket and paths for uploading.
+
+    Parameters
+    ----------
+    pool : ThreadPoolExecutor | ProcessPoolExecutor
+        concurrent.futures executor to submit calls to
+    func : callable
+        function to call on submitting
+    item_input : str
+        function input field to submit each items of `items` to
+    items : iterable
+        iterable of object to submit
+
+    Returns
+    -------
+    dict
+        mapping of concurrent.futures.Future objects to the original
+        `item` submitted for that future
+    """
+    return {
+        pool.submit(
+            func,
+            **{**{item_input: item}, **kwargs},
+        ): item
+        for item in items
+    }
 
 
 def multi_thread_upload(
     files, bucket, remote_path, threads, parent_path
-) -> list:
+) -> Tuple[Dict[str, str], list]:
     """
     Uploads the given set of `files` to S3 on a single CPU core using
-    maximum of n threads
+    maximum of n threads.
+
+    We are defining one S3 client per core due to boto3 clients being thread
+    safe but not safe to share across processes due to expected response
+    ordering: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/clients.html#caveat
+
+    We will also set `disable_request_compression` since the majority of run
+    data will not compress and this reduces unneeded CPU and memory load.
 
     Parameters
     ----------
@@ -161,31 +208,34 @@ def multi_thread_upload(
     -------
     dict
         mapping of local file to ETag ID of uploaded file
+    list
+        list of any files that failed to upload
     """
-    log.info(f"Uploading {len(files)} with {threads} threads")
+    log.info("Uploading %s with %s threads", len(files), threads)
 
-    # defining one S3 client per core due to boto3 clients being thread
-    # safe but not safe to share across processes due to expected response
-    # ordering: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/clients.html#caveats
     session = boto3.session.Session()
     s3_client = session.client(
-        "s3", config=Config(retries={"max_attempts": 10, "mode": "standard"})
+        "s3",
+        config=Config(
+            retries={"total_max_attempts": 10, "mode": "standard"},
+            disable_request_compression=True,
+        ),
     )
 
     uploaded_files = {}
+    failed_upload = []
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        concurrent_jobs = {
-            executor.submit(
-                upload_single_file,
-                s3_client=s3_client,
-                bucket=bucket,
-                remote_path=remote_path,
-                local_file=item,
-                parent_path=parent_path,
-            ): item
-            for item in files
-        }
+        concurrent_jobs = _submit_to_pool(
+            pool=executor,
+            func=upload_single_file,
+            item_input="local_file",
+            items=files,
+            s3_client=s3_client,
+            bucket=bucket,
+            remote_path=remote_path,
+            parent_path=parent_path,
+        )
 
         for future in as_completed(concurrent_jobs):
             # access returned output as each is returned in any order
@@ -193,16 +243,19 @@ def multi_thread_upload(
                 local_file, remote_id = future.result()
                 uploaded_files[local_file] = remote_id
             except Exception as exc:
-                # catch any other errors that might get raised
-                print(f"\nError: {concurrent_jobs[future]}: {exc}")
-                raise exc
+                # catch any errors that may get raised from uploading, we
+                # will return a list of failed files to try reupload later
+                log.error(
+                    "Error in uploading %s: %s", concurrent_jobs[future], exc
+                )
+                failed_upload.append(concurrent_jobs[future])
 
-    return uploaded_files
+    return uploaded_files, failed_upload
 
 
 def multi_core_upload(
     files, bucket, remote_path, cores, threads, parent_path
-) -> list:
+) -> Tuple[Dict[str, str], list]:
     """
     Call the multi_thread_upload on `files` split across n
     logical CPU cores
@@ -227,34 +280,54 @@ def multi_core_upload(
     -------
     dict
         mapping of local file to ETag ID of uploaded file
+    list
+        list of any files that failed to upload
     """
     log.info(
-        f"Beginning upload {len(files)} files with {cores} cores to"
-        f"{bucket}:{remote_path}"
+        "Beginning uploading %s files with %s cores to%s:%s",
+        len(files),
+        cores,
+        bucket,
+        remote_path,
     )
 
-    uploaded_files = {}
+    all_uploaded_files = {}
+    all_failed_upload = []
 
-    with ProcessPoolExecutor(max_workers=cores) as exe:
-        concurrent_jobs = {
-            exe.submit(
-                multi_thread_upload,
-                files=sub_files,
-                bucket=bucket,
-                remote_path=remote_path,
-                threads=threads,
-                parent_path=parent_path,
-            ): sub_files
-            for sub_files in files
-        }
+    with ProcessPoolExecutor(max_workers=cores) as executor:
+        concurrent_jobs = _submit_to_pool(
+            pool=executor,
+            func=multi_thread_upload,
+            item_input="files",
+            items=files,
+            bucket=bucket,
+            remote_path=remote_path,
+            parent_path=parent_path,
+            threads=threads,
+        )
 
         for future in as_completed(concurrent_jobs):
             # access returned output as each is returned in any order
             try:
-                uploaded_files = {**uploaded_files, **future.result()}
+                uploaded_files, failed_upload = future.result()
+
+                all_uploaded_files = {**all_uploaded_files, **uploaded_files}
+                all_failed_upload.extend(failed_upload)
             except Exception as exc:
                 # catch any other errors that might get raised
                 print(f"\nError: {concurrent_jobs[future]}: {exc}")
                 raise exc
 
-    return uploaded_files
+    log.info(
+        "Successfully uploaded %s files to %s:%s",
+        len(all_uploaded_files.keys()),
+        bucket,
+        remote_path,
+    )
+    if all_failed_upload:
+        log.error(
+            "%s files failed to upload and will be logged for retrying",
+            len(all_failed_upload),
+        )
+
+    return all_uploaded_files, all_failed_upload

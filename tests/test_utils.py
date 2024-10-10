@@ -1,8 +1,10 @@
+import json
 import os
 from pathlib import Path
 import re
 from shutil import rmtree
 import unittest
+from unittest.mock import patch
 
 import pytest
 
@@ -93,8 +95,79 @@ class TestCheckIsSequencingRunDir(unittest.TestCase):
         os.remove(run_info_xml)
 
 
+@patch("s3_upload.utils.utils.path.exists")
+@patch("s3_upload.utils.utils.read_upload_state_log")
+class TestCheckUploadState(unittest.TestCase):
+    def test_new_returned_when_upload_log_does_not_exist(
+        self, mock_log, mock_exists
+    ):
+        mock_exists.return_value = False
+
+        upload_state, uploaded_files = utils.check_upload_state(
+            run_dir="/some/path/to/test_run"
+        )
+
+        with self.subTest("correct path provided to check exists"):
+            expected_log_path = (
+                "/var/log/s3_upload/uploads/test_run.upload.log.json"
+            )
+
+            self.assertEqual(expected_log_path, mock_exists.call_args[0][0])
+
+        with self.subTest("correct string returned"):
+            self.assertEqual(upload_state, "new")
+
+        with self.subTest("empty file list returned"):
+            self.assertEqual(uploaded_files, [])
+
+    def test_uploaded_returned_for_run_that_has_uploaded(
+        self, mock_log, mock_exists
+    ):
+        mock_exists.return_value = True
+
+        mock_log.return_value = {
+            "run_id": "test_run",
+            "run_path": "/some/path/to/test_run",
+            "uploaded": True,
+            "uploaded_files": {"file1.txt": "abc123", "file2.txt": "def456"},
+        }
+
+        upload_state, uploaded_files = utils.check_upload_state(
+            run_dir="/some/path/to/test_run"
+        )
+
+        with self.subTest("uploaded run correctly returned"):
+            self.assertEqual(upload_state, "uploaded")
+
+        with self.subTest("correct file list returned"):
+            self.assertEqual(uploaded_files, ["file1.txt", "file2.txt"])
+
+    def test_partial_returned_for_run_that_has_not_fully_uploaded(
+        self, mock_log, mock_exists
+    ):
+        mock_exists.return_value = True
+
+        mock_log.return_value = {
+            "run_id": "test_run",
+            "run_path": "/some/path/to/test_run",
+            "uploaded": False,
+            "uploaded_files": {"file1.txt": "abc123", "file2.txt": "def456"},
+        }
+
+        upload_state, uploaded_files = utils.check_upload_state(
+            run_dir="/some/path/to/test_run"
+        )
+
+        with self.subTest("partial correctly returned"):
+            self.assertEqual(upload_state, "partial")
+
+        with self.subTest("correct file list returned"):
+            self.assertEqual(uploaded_files, ["file1.txt", "file2.txt"])
+
+
 class TestGetRunsToUpload(unittest.TestCase):
     def test_uploadable_directories_correctly_returned(self):
+        # TODO - add additional tests to cover calling of check_upload_state
         test_run_dir_structure = [
             # valid incomplete NovaSeq run -> not to upload
             "seq1/run1/RunInfo.xml",
@@ -120,7 +193,7 @@ class TestGetRunsToUpload(unittest.TestCase):
             )
             open(test_file, "w").close()
 
-        returned_upload_dirs = utils.get_runs_to_upload(
+        returned_upload_dirs, _ = utils.get_runs_to_upload(
             monitor_dirs=[
                 os.path.join(TEST_DATA_DIR, "seq1"),
                 os.path.join(TEST_DATA_DIR, "seq2"),
@@ -294,6 +367,18 @@ class TestGetSequencingFileList(unittest.TestCase):
                 )
 
 
+class TestFilterUploadedFiles(unittest.TestCase):
+    def test_correct_file_list_returned(self):
+        local_files = ["file1.txt", "file2.txt", "file3.txt"]
+        uploaded_files = ["file1.txt", "file2.txt"]
+
+        to_upload = utils.filter_uploaded_files(
+            local_files=local_files, uploaded_files=uploaded_files
+        )
+
+        self.assertEqual(to_upload, ["file3.txt"])
+
+
 class TestSplitFileListByCores(unittest.TestCase):
     items = [1, 2, 3, 4, 5, 6, 7, 8, 100, 110, 120, 130, 140, 150, 160, 170]
 
@@ -357,6 +442,191 @@ class TestParseConfig(unittest.TestCase):
         }
 
         self.assertEqual(expected_contents, config_contents)
+
+
+@patch("s3_upload.utils.utils.path.exists")
+class TestWriteUploadStateToLog(unittest.TestCase):
+    def tearDown(self):
+        os.remove(os.path.join(TEST_DATA_DIR, "test_run.upload.log.json"))
+
+    def test_when_no_file_exists_for_fully_uploaded_run(self, mock_exists):
+        mock_exists.return_value = False
+        log_file = os.path.join(TEST_DATA_DIR, "test_run.upload.log.json")
+
+        utils.write_upload_state_to_log(
+            run_id="test_run",
+            run_path="/some/path/seq1/test_run",
+            log_file=log_file,
+            local_files=["file1.txt", "file2.txt", "file3.txt"],
+            uploaded_files={
+                "file1.txt": "abc123",
+                "file2.txt": "def456",
+                "file3.txt": "ghi789",
+            },
+            failed_files=[],
+        )
+
+        with open(log_file, "r") as fh:
+            written_log_contents = json.load(fh)
+
+        expected_log_contents = {
+            "run_id": "test_run",
+            "run path": "/some/path/seq1/test_run",
+            "completed": True,
+            "total_local_files": 3,
+            "total_uploaded_files": 3,
+            "total_failed_upload": 0,
+            "failed_upload_files": [],
+            "uploaded_files": {
+                "file1.txt": "abc123",
+                "file2.txt": "def456",
+                "file3.txt": "ghi789",
+            },
+        }
+
+        self.assertDictEqual(written_log_contents, expected_log_contents)
+
+    def test_when_no_file_exists_for_partially_uploaded_run(self, mock_exists):
+        mock_exists.return_value = False
+        log_file = os.path.join(TEST_DATA_DIR, "test_run.upload.log.json")
+
+        utils.write_upload_state_to_log(
+            run_id="test_run",
+            run_path="/some/path/seq1/test_run",
+            log_file=log_file,
+            local_files=["file1.txt", "file2.txt", "file3.txt"],
+            uploaded_files={
+                "file1.txt": "abc123",
+                "file2.txt": "def456",
+            },
+            failed_files=["file3.txt"],
+        )
+
+        with open(log_file, "r") as fh:
+            written_log_contents = json.load(fh)
+
+        expected_log_contents = {
+            "run_id": "test_run",
+            "run path": "/some/path/seq1/test_run",
+            "completed": False,
+            "total_local_files": 3,
+            "total_uploaded_files": 2,
+            "total_failed_upload": 1,
+            "failed_upload_files": ["file3.txt"],
+            "uploaded_files": {"file1.txt": "abc123", "file2.txt": "def456"},
+        }
+
+        self.assertDictEqual(written_log_contents, expected_log_contents)
+
+    def test_when_log_file_exists_that_complete_run_data_is_merged_in(
+        self, mock_exists
+    ):
+        mock_exists.return_value = True
+        log_file = os.path.join(TEST_DATA_DIR, "test_run.upload.log.json")
+
+        # set up a log file from a previous partial upload with some
+        # failed file uploads
+        partial_run_contents = {
+            "run_id": "test_run",
+            "run path": "/some/path/seq1/test_run",
+            "completed": False,
+            "total_local_files": 3,
+            "total_uploaded_files": 2,
+            "total_failed_upload": 1,
+            "failed_upload_files": ["file3.txt"],
+            "uploaded_files": {"file1.txt": "abc123", "file2.txt": "def456"},
+        }
+
+        with open(log_file, "w") as fh:
+            json.dump(partial_run_contents, fh)
+
+        utils.write_upload_state_to_log(
+            run_id="test_run",
+            run_path="/some/path/seq1/test_run",
+            log_file=log_file,
+            local_files=["file1.txt", "file2.txt", "file3.txt"],
+            uploaded_files={
+                "file3.txt": "ghi789",
+            },
+            failed_files=[],
+        )
+
+        expected_contents = {
+            "run_id": "test_run",
+            "run path": "/some/path/seq1/test_run",
+            "completed": True,
+            "total_local_files": 3,
+            "total_uploaded_files": 3,
+            "total_failed_upload": 0,
+            "failed_upload_files": [],
+            "uploaded_files": {
+                "file1.txt": "abc123",
+                "file2.txt": "def456",
+                "file3.txt": "ghi789",
+            },
+        }
+
+        with open(log_file, "r") as fh:
+            written_log_contents = json.load(fh)
+
+        self.assertDictEqual(written_log_contents, expected_contents)
+
+    def test_when_log_file_exists_that_partially_complete_run_data_is_merged_in(
+        self, mock_exists
+    ):
+        """
+        Test when a previous partially uploaded run has written to the log,
+        and another upload attempt still does not upload all files that
+        the log is correctly updated but leaves the `completed` key as False
+        """
+        mock_exists.return_value = True
+        log_file = os.path.join(TEST_DATA_DIR, "test_run.upload.log.json")
+
+        # set up a log file from a previous partial upload with some
+        # failed file uploads
+        partial_run_contents = {
+            "run_id": "test_run",
+            "run path": "/some/path/seq1/test_run",
+            "completed": False,
+            "total_local_files": 3,
+            "total_uploaded_files": 1,
+            "total_failed_upload": 1,
+            "failed_upload_files": ["file2.txt", "file3.txt"],
+            "uploaded_files": {"file1.txt": "abc123"},
+        }
+
+        with open(log_file, "w") as fh:
+            json.dump(partial_run_contents, fh)
+
+        utils.write_upload_state_to_log(
+            run_id="test_run",
+            run_path="/some/path/seq1/test_run",
+            log_file=log_file,
+            local_files=["file1.txt", "file2.txt", "file3.txt"],
+            uploaded_files={
+                "file2.txt": "def456",
+            },
+            failed_files=["file3.txt"],
+        )
+
+        expected_contents = {
+            "run_id": "test_run",
+            "run path": "/some/path/seq1/test_run",
+            "completed": False,
+            "total_local_files": 3,
+            "total_uploaded_files": 2,
+            "total_failed_upload": 1,
+            "failed_upload_files": ["file3.txt"],
+            "uploaded_files": {
+                "file1.txt": "abc123",
+                "file2.txt": "def456",
+            },
+        }
+
+        with open(log_file, "r") as fh:
+            written_log_contents = json.load(fh)
+
+        self.assertDictEqual(written_log_contents, expected_contents)
 
 
 class TestVerifyArgs(unittest.TestCase):
