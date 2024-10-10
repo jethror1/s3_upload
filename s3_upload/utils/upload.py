@@ -306,18 +306,6 @@ def multi_core_upload(
             threads=threads,
         )
 
-        # concurrent_jobs = {
-        #     exe.submit(
-        #         multi_thread_upload,
-        #         files=sub_files,
-        #         bucket=bucket,
-        #         remote_path=remote_path,
-        #         threads=threads,
-        #         parent_path=parent_path,
-        #     ): sub_files
-        #     for sub_files in files
-        # }
-
         for future in as_completed(concurrent_jobs):
             # access returned output as each is returned in any order
             try:
