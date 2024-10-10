@@ -149,6 +149,7 @@ def monitor_directories_for_upload(config):
 
     cores = config.get("max_cores", cpu_count)
     threads = config.get("max_threads", 4)
+    log_dir = config.get("log_dir", "/var/log/s3_upload")
 
     to_upload = []
     partially_uploaded = []
@@ -157,7 +158,7 @@ def monitor_directories_for_upload(config):
     # and build a dict per run with config of where to upload
     for monitor_dir_config in config["monitor"]:
         completed_runs, partially_uploaded = get_runs_to_upload(
-            monitor_dir_config["monitored_directories"]
+            monitor_dir_config["monitored_directories"], log_dir=log_dir
         )
 
         for run_dir in completed_runs:
@@ -228,9 +229,8 @@ def monitor_directories_for_upload(config):
         )
 
         # set output logs to go into subdirectory with stdout/stderr log
-        log_dir = config.get("log_dir", "/var/log/s3_upload")
         run_log_file = path.join(
-            log_dir, "/uploads/{run_config['run_id']}.upload.log.json"
+            log_dir, f"/uploads/{run_config['run_id']}.upload.log.json"
         )
 
         write_upload_state_to_log(

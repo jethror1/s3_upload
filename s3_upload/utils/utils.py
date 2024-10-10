@@ -65,14 +65,18 @@ def check_is_sequencing_run_dir(run_dir) -> bool:
     return path.exists(path.join(run_dir, "RunInfo.xml"))
 
 
-def check_upload_state(sub_dir) -> Union[str, list]:
+def check_upload_state(
+    run_dir, log_dir="/var/log/s3_upload/"
+) -> Union[str, list]:
     """
     Checking upload state of run (i.e. uploaded, partial, new)
 
     Parameters
     ----------
-    sub_dir : str
-        name of directory to check upload state
+    run_dir : str
+        name of run directory to check upload state
+    log_dir : str
+        directory where to read per run upload log files from
 
     Returns
     -------
@@ -81,12 +85,15 @@ def check_upload_state(sub_dir) -> Union[str, list]:
     list
         list of uploaded files
     """
-    upload_log = path.join("/var/log/s3_upload/uploads/", Path(sub_dir).name)
+    upload_log = path.join(
+        log_dir, "uploads/", f"{Path(run_dir).name}.upload.log.json"
+    )
 
     if not path.exists(upload_log):
         return "new", []
 
     log_contents = read_upload_state_log(log_file=upload_log)
+
     uploaded_files = list(log_contents["uploaded_files"].keys())
 
     if log_contents["uploaded"]:
@@ -95,7 +102,9 @@ def check_upload_state(sub_dir) -> Union[str, list]:
         return "partial", uploaded_files
 
 
-def get_runs_to_upload(monitor_dirs) -> Union[list, dict]:
+def get_runs_to_upload(
+    monitor_dirs, log_dir="/var/log/s3_upload"
+) -> Union[list, dict]:
     """
     Get completed sequencing runs to upload from specified directories
     to monitor
@@ -104,6 +113,8 @@ def get_runs_to_upload(monitor_dirs) -> Union[list, dict]:
     ----------
     monitor_dirs : list
         list of directories to check for completed sequencing runs
+    log_dir : str
+        directory where to read per run upload log files from
 
     Returns
     -------
@@ -144,7 +155,9 @@ def get_runs_to_upload(monitor_dirs) -> Union[list, dict]:
                 )
                 continue
 
-            upload_state, uploaded_files = check_upload_state(sub_dir)
+            upload_state, uploaded_files = check_upload_state(
+                run_dir=sub_dir, log_dir=log_dir
+            )
 
             if upload_state == "uploaded":
                 log.info(
