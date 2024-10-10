@@ -167,6 +167,7 @@ class TestCheckUploadState(unittest.TestCase):
 
 class TestGetRunsToUpload(unittest.TestCase):
     def test_uploadable_directories_correctly_returned(self):
+        # TODO - add additional tests to cover calling of check_upload_state
         test_run_dir_structure = [
             # valid incomplete NovaSeq run -> not to upload
             "seq1/run1/RunInfo.xml",
