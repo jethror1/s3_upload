@@ -284,7 +284,7 @@ def multi_core_upload(
         list of any files that failed to upload
     """
     log.info(
-        "Beginning upload %s files with %s cores to%s:%s",
+        "Beginning uploading %s files with %s cores to%s:%s",
         len(files),
         cores,
         bucket,
