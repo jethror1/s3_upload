@@ -104,11 +104,13 @@ class TestCheckUploadState(unittest.TestCase):
         mock_exists.return_value = False
 
         upload_state, uploaded_files = utils.check_upload_state(
-            sub_dir="/some/path/to/test_run"
+            run_dir="/some/path/to/test_run"
         )
 
         with self.subTest("correct path provided to check exists"):
-            expected_log_path = "/var/log/s3_upload/uploads/test_run"
+            expected_log_path = (
+                "/var/log/s3_upload/uploads/test_run.upload.log.json"
+            )
 
             self.assertEqual(expected_log_path, mock_exists.call_args[0][0])
 
@@ -131,7 +133,7 @@ class TestCheckUploadState(unittest.TestCase):
         }
 
         upload_state, uploaded_files = utils.check_upload_state(
-            sub_dir="/some/path/to/test_run"
+            run_dir="/some/path/to/test_run"
         )
 
         with self.subTest("uploaded run correctly returned"):
@@ -153,7 +155,7 @@ class TestCheckUploadState(unittest.TestCase):
         }
 
         upload_state, uploaded_files = utils.check_upload_state(
-            sub_dir="/some/path/to/test_run"
+            run_dir="/some/path/to/test_run"
         )
 
         with self.subTest("partial correctly returned"):
