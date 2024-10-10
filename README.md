@@ -49,6 +49,27 @@ Monitoring of specified directories for sequencing runs to upload are defined in
 
 Each dictionary inside of the list to monitor allows for setting separate upload locations for each of the monitored directories. For example, in the below example the output of both `sequencer_1` and `sequencer_2` would be uploaded to the root of `bucket_A`, and the output of `sequencer_3` would be uploaded into `sequencer_3_runs` in `bucket_B`. Any number of these dictionaries may be defined in the monitor list.
 
+```
+    "monitor": [
+        {
+            "monitored_directories": [
+                "/absolute/path/to/sequencer_1",
+                "/absolute/path/to/sequencer_2"
+            ],
+            "bucket": "bucket_A",
+            "remote_path": "/"
+        },
+        {
+            "monitored_directories": [
+                "/absolute/path/to/sequencer_3"
+            ],
+            "bucket": "bucket_B",
+            "remote_path": "/sequencer_3_runs"
+        }
+    ]
+```
+*Example `monitor` config section defining two sets of monitored directories and upload locations*
+
 ## Logging
 
 All logs by default are written to `/var/log/s3_upload`. Logs from stdout and stderr are written to the file `s3_upload.log`, and are on a rotating time handle at midnight and backups stored in the same directory for 5 days.
