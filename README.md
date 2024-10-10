@@ -34,7 +34,7 @@ Available inputs for `monitor`:
 
 ## Config
 
-The behaviour for monitoring of directories for sequencing runs to upload is controlled through the use of a JSON config file. An example may be found [here].
+The behaviour for monitoring of directories for sequencing runs to upload is controlled through the use of a JSON config file. An example may be found [here](https://github.com/eastgenomics/s3_upload/blob/URA-872_update_readme/example/example_config.json).
 
 The top level keys that may be defined include:
 * `max_cores` (int): maximum number of CPU cores to split uploading across (default is the maximum available)
