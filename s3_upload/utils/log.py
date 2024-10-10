@@ -20,6 +20,8 @@ def set_file_handler(logger, log_dir) -> None:
     print(log_dir)
     check_write_permission_to_log_dir(log_dir)
 
+    log_file = os.path.join(log_dir, "s3_upload.log")
+
     file_handler = TimedRotatingFileHandler(
         log_file, when="midnight", backupCount=5
     )
