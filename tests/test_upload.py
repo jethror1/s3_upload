@@ -151,9 +151,7 @@ class TestUploadSingleFile(unittest.TestCase):
                 )
 
                 self.assertEqual(
-                    mock_client.return_value.upload_file.call_args[1][
-                        "object_name"
-                    ],
+                    mock_client.return_value.upload_file.call_args[1]["Key"],
                     args["expected_upload_path"],
                 )
 
