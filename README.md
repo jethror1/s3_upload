@@ -1,4 +1,4 @@
-# s3_upload
+# s3 upload
 Uploads Illumina sequencing runs into AWS S3 storage.
 
 There are 2 modes implemented, one to interactively upload a single sequencing run, and another to monitor on a schedule (i.e. via cron) one or more directories for newly completed sequencing runs and automatically upload into a given S3 bucket location.
