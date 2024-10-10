@@ -241,12 +241,12 @@ def main() -> None:
     args = parse_args()
 
     if args.mode == "upload":
-        set_file_handler(log, "/var/log/s3_upload")
-        exit()
         upload_single_run(args)
     else:
         config = read_config(config=args.config)
         verify_config(config=config)
+
+        set_file_handler(log, config.get("log_dir", "/var/log/s3_upload"))
 
         monitor_directories_for_upload(config)
 

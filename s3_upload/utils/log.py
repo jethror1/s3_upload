@@ -28,9 +28,11 @@ def set_file_handler(logger, log_dir) -> None:
     log_dir : str
         path to where to write log file to
     """
-    check_write_permission_to_log_dir(log_dir)
-
     log_file = os.path.join(log_dir, "s3_upload.log")
+
+    logger.info("setting log output to %s", log_file)
+
+    check_write_permission_to_log_dir(log_dir)
 
     file_handler = TimedRotatingFileHandler(
         log_file, when="midnight", backupCount=5
