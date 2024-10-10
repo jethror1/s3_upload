@@ -1,5 +1,5 @@
 import argparse
-from os import cpu_count
+from os import cpu_count, path
 from pathlib import Path
 
 from utils.upload import (
@@ -154,27 +154,28 @@ def monitor_directories_for_upload(config):
     partially_uploaded = []
 
     # find all the runs to upload in the specified monitored directories
+    # and build a dict per run with config of where to upload
     for monitor_dir_config in config["monitor"]:
         completed_runs, partially_uploaded = get_runs_to_upload(
             monitor_dir_config["monitored_directories"]
         )
 
-        to_upload.extend(
-            [
+        for run_dir in completed_runs:
+            to_upload.append(
                 {
                     "run_dir": run_dir,
+                    "run_id": Path(run_dir).name,
                     "parent_path": Path(run_dir).parent,
                     "bucket": monitor_dir_config["bucket"],
                     "remote_path": monitor_dir_config["remote_path"],
                 }
-                for run_dir in completed_runs
-            ]
-        )
+            )
 
         for partial_run, uploaded_files in partially_uploaded.items():
             partially_uploaded.append(
                 {
                     "run_dir": partial_run,
+                    "run_id": Path(partial_run).name,
                     "parent_path": Path(partial_run).parent,
                     "bucket": monitor_dir_config["bucket"],
                     "remote_path": monitor_dir_config["remote_path"],
@@ -199,19 +200,18 @@ def monitor_directories_for_upload(config):
 
     for run_config in to_upload:
         # begin uploading of each sequencing run
-        files = get_sequencing_file_list(run_config["run_dir"])
+        all_run_files = get_sequencing_file_list(run_config["run_dir"])
+        files_to_upload = all_run_files.copy()
 
         if run_config.get("uploaded_files"):
-            files = filter_uploaded_files(
-                local_files=files,
+            # files we stored from a previous partial upload to not reupload
+            files_to_upload = filter_uploaded_files(
+                local_files=files_to_upload,
                 uploaded_files=run_config.get("uploaded_files"),
             )
 
-        files = split_file_list_by_cores(files=files, n=cores)
-
-        run_log_file = (
-            f"/var/log/s3_upload/uploads/{run_config['run_id']}."
-            "upload.log.json"
+        files_to_upload = split_file_list_by_cores(
+            files=files_to_upload, n=cores
         )
 
         # call the actual upload, any errors being raised that result in
@@ -219,7 +219,7 @@ def monitor_directories_for_upload(config):
         # upload state log storing the run as not complete, allowing for
         # retries on uploading
         uploaded_files, failed_upload = multi_core_upload(
-            files=files,
+            files=files_to_upload,
             bucket=run_config["bucket"],
             remote_path=run_config["remote_path"],
             cores=cores,
@@ -227,11 +227,17 @@ def monitor_directories_for_upload(config):
             parent_path=run_config["parent_path"],
         )
 
+        # set output logs to go into subdirectory with stdout/stderr log
+        log_dir = config.get("log_dir", "/var/log/s3_upload")
+        run_log_file = path.join(
+            log_dir, "/uploads/{run_config['run_id']}.upload.log.json"
+        )
+
         write_upload_state_to_log(
-            run_id=Path(run_config["run_id"]),
+            run_id=run_config["run_id"],
             run_path=run_config["run_dir"],
             log_file=run_log_file,
-            local_files=[x for y in files for x in y],
+            local_files=all_run_files,
             uploaded_files=uploaded_files,
             failed_files=failed_upload,
         )
