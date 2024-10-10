@@ -1,4 +1,9 @@
-from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import (
+    Future,
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+    as_completed,
+)
 import re
 import unittest
 from unittest.mock import ANY, call, patch
@@ -176,7 +181,6 @@ class TestUploadSingleFile(unittest.TestCase):
 
 @patch("s3_upload.utils.upload.upload_single_file")
 @patch("s3_upload.utils.upload.boto3.session.Session.client")
-@patch("s3_upload.utils.upload.as_completed")
 class TestMultiThreadUpload(unittest.TestCase):
     local_files = [
         "/path/to/monitored_dir/run1/Samplesheet.csv",
@@ -184,6 +188,7 @@ class TestMultiThreadUpload(unittest.TestCase):
         "/path/to/monitored_dir/run1/CopyComplete.txt",
     ]
 
+    @patch("s3_upload.utils.upload.as_completed")
     def test_correct_number_of_calls_to_upload(
         self, mock_thread, mock_client, mock_upload
     ):
@@ -197,6 +202,7 @@ class TestMultiThreadUpload(unittest.TestCase):
 
         self.assertEqual(mock_upload.call_count, 3)
 
+    @patch("s3_upload.utils.upload.as_completed")
     @patch("s3_upload.utils.upload.ThreadPoolExecutor")
     def test_correct_number_of_threads_set(
         self, mock_pool, mock_thread, mock_client, mock_upload
@@ -212,6 +218,7 @@ class TestMultiThreadUpload(unittest.TestCase):
                 )
                 self.assertEqual(mock_pool.call_args[1]["max_workers"], thread)
 
+    @patch("s3_upload.utils.upload.as_completed")
     def test_upload_function_called_with_correct_args(
         self, mock_thread, mock_client, mock_upload
     ):
@@ -251,6 +258,7 @@ class TestMultiThreadUpload(unittest.TestCase):
             expected_call_args_for_all_calls, mock_upload.call_args_list
         )
 
+    @patch("s3_upload.utils.upload.as_completed")
     def test_correct_file_and_id_returned(
         self, mock_thread, mock_client, mock_upload
     ):
@@ -268,12 +276,14 @@ class TestMultiThreadUpload(unittest.TestCase):
         for i, j in zip(mock_thread.return_value, return_values):
             i.set_result(j)
 
-        returned_uploaded_file_mapping = upload.multi_thread_upload(
-            files=self.local_files,
-            bucket="test_bucket",
-            remote_path="/",
-            threads=4,
-            parent_path="/path/to/monitored_dir/",
+        returned_uploaded_file_mapping, files_failed_upload = (
+            upload.multi_thread_upload(
+                files=self.local_files,
+                bucket="test_bucket",
+                remote_path="/",
+                threads=4,
+                parent_path="/path/to/monitored_dir/",
+            )
         )
 
         expected_local_file_to_remote_id_mapping = {
@@ -282,14 +292,25 @@ class TestMultiThreadUpload(unittest.TestCase):
             "/path/to/monitored_dir/run1/CopyComplete.txt": "ghi",
         }
 
-        self.assertEqual(
-            expected_local_file_to_remote_id_mapping,
-            returned_uploaded_file_mapping,
-        )
+        with self.subTest("correct file name to IDs returned"):
+            self.assertEqual(
+                expected_local_file_to_remote_id_mapping,
+                returned_uploaded_file_mapping,
+            )
 
+        with self.subTest("no failed file uploads returned"):
+            self.assertEqual(files_failed_upload, [])
+
+    @patch("s3_upload.utils.upload.as_completed")
     @patch("s3_upload.utils.upload.ThreadPoolExecutor")
+    @patch("s3_upload.utils.upload._submit_to_pool")
     def test_list_of_failed_files_returned_on_exception_raised_from_upload(
-        self, mock_pool, mock_as_completed, mock_client, mock_upload
+        self,
+        mock_submit,
+        mock_pool,
+        mock_as_completed,
+        mock_client,
+        mock_upload,
     ):
         """
         When one or more of the calls to upload.upload_single_file fails,
@@ -297,7 +318,8 @@ class TestMultiThreadUpload(unittest.TestCase):
         added to a list of files that fail to upload. We will then log
         these to retry uploading on rerunning.
         """
-        # mock one file uploading and 2 failing
+        # mock one file uploading and 2 failing being returned as the result
+        # from each future in the pool
         mock_pool.return_value.submit.return_value = [
             Future(),
             Future(),
@@ -305,7 +327,7 @@ class TestMultiThreadUpload(unittest.TestCase):
         ]
         mock_pool.return_value.submit.return_value[0].set_result(
             (
-                "/path/to/monitored_dir/run1/Samplesheet.csv",
+                "/path/to/monitored_dir/run1/file1.txt",
                 "abc",
             )
         )
@@ -320,23 +342,36 @@ class TestMultiThreadUpload(unittest.TestCase):
             ),
         )
 
-        submitted_concurrent_jobs = {
-            k: "a" for k in mock_pool.return_value.submit.return_value
+        # mock the response of all submitted futures to the pool, this
+        # returns a dict mapping the future to the submitted input (i.e
+        # the file), allowing us to access the file of any that the future
+        # raises an error from
+        mock_submit.return_value = {
+            future: input_file
+            for future, input_file in zip(
+                mock_pool.return_value.submit.return_value,
+                ["file1.txt", "file2.txt", "file3.txt"],
+            )
         }
 
-        mock_as_completed.call_args = submitted_concurrent_jobs
+        mock_as_completed.return_value = (
+            mock_pool.return_value.submit.return_value
+        )
 
-        # mock_as_completed.return_value = (
-        #     mock_pool.return_value.submit.return_value
-        # )
-
-        returned_uploaded_file_mapping = upload.multi_thread_upload(
+        uploaded_files, failed_files = upload.multi_thread_upload(
             files=self.local_files,
             bucket="test_bucket",
             remote_path="/",
             threads=4,
             parent_path="/path/to/monitored_dir/",
         )
+
+        with self.subTest("successful file upload returned"):
+            expected_upload = {"/path/to/monitored_dir/run1/file1.txt": "abc"}
+            self.assertEqual(uploaded_files, expected_upload)
+
+        with self.subTest("failed files returned"):
+            self.assertEqual(failed_files, ["file2.txt", "file3.txt"])
 
 
 class TestMultiCoreUpload(unittest.TestCase):
