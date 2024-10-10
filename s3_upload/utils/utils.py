@@ -6,7 +6,7 @@ import json
 from os import path, scandir, stat
 from pathlib import Path
 import re
-from typing import List, Union
+from typing import List, Tuple
 
 from .log import get_logger
 
@@ -67,7 +67,7 @@ def check_is_sequencing_run_dir(run_dir) -> bool:
 
 def check_upload_state(
     run_dir, log_dir="/var/log/s3_upload/"
-) -> Union[str, list]:
+) -> Tuple[str, list]:
     """
     Checking upload state of run (i.e. uploaded, partial, new)
 
@@ -105,7 +105,7 @@ def check_upload_state(
 
 def get_runs_to_upload(
     monitor_dirs, log_dir="/var/log/s3_upload"
-) -> Union[list, dict]:
+) -> Tuple[list, dict]:
     """
     Get completed sequencing runs to upload from specified directories
     to monitor
