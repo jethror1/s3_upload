@@ -198,7 +198,7 @@ def monitor_directories_for_upload(config):
         log.info(
             "Found %s partially uploaded runs to continue uploading: %s",
             len(partially_uploaded),
-            ", ".join([Path(x["run_dir"]).name for x in partially_uploaded]),
+            ", ".join([x["run_id"] for x in partially_uploaded]),
         )
 
         # preferentially upload partial runs first
