@@ -19,7 +19,7 @@ from utils.utils import (
     verify_args,
     verify_config,
 )
-from utils.log import get_logger
+from utils.log import get_logger, set_file_handler
 
 
 log = get_logger("s3 upload")
@@ -241,6 +241,8 @@ def main() -> None:
     args = parse_args()
 
     if args.mode == "upload":
+        set_file_handler(log, "/var/log/s3_upload")
+        exit()
         upload_single_run(args)
     else:
         config = read_config(config=args.config)

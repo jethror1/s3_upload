@@ -16,12 +16,29 @@ def get_console_handler():
     return console_handler
 
 
-def get_file_handler(log_file):
+def set_file_handler(logger, log_file) -> None:
+    check_write_permission_to_log_dir(Path(log_file).parent)
+
     file_handler = TimedRotatingFileHandler(
         log_file, when="midnight", backupCount=5
     )
     file_handler.setFormatter(FORMATTER)
-    return file_handler
+
+    logger.addHandler(file_handler)
+    # return file_handler
+
+
+# def set_file_handler(logger, log_file) -> None:
+#     """
+#     _summary_
+
+#     Parameters
+#     ----------
+#     logger : _type_
+#         _description_
+#     log_file : _type_
+#         _description_
+#     """
 
 
 def check_write_permission_to_log_dir(log_dir) -> None:
@@ -83,8 +100,6 @@ def get_logger(
         # logger already exists => use it
         return logging.getLogger(logger_name)
 
-    check_write_permission_to_log_dir(log_dir)
-
     log_file = os.path.join(log_dir, "s3_upload.log")
 
     Path(log_dir).mkdir(parents=True, exist_ok=True)
@@ -96,8 +111,6 @@ def get_logger(
         logger.setLevel(log_level)
 
     logger.addHandler(get_console_handler())
-    logger.addHandler(get_file_handler(log_file))
-
     logger.propagate = False
 
     logger.info("Initialised log handle, beginning logging to %s", log_file)
