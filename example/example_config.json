@@ -14,7 +14,7 @@
         },
         {
             "monitored_directories": [
-                "/absolute/path/to/sequencer_3",
+                "/absolute/path/to/sequencer_3"
             ],
             "bucket": "bucket_B",
             "remote_path": "/sequencer_3_runs"
