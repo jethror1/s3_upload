@@ -61,7 +61,7 @@ def check_buckets_exist(*buckets) -> List[dict]:
     RuntimeError
         Raised when one or more buckets do not exist / not accessible
     """
-    log.info("Checking bucket(s) %s exist", buckets)
+    log.info("Checking bucket(s) exist and accessible: %s", ", ".join(buckets))
 
     valid = []
     invalid = []
