@@ -17,7 +17,17 @@ def get_console_handler():
 
 
 def set_file_handler(logger, log_dir) -> None:
-    print(log_dir)
+    """
+    Set the file handler to redirect all logs to log file `s3_upload.log`
+    in the specified directory
+
+    Parameters
+    ----------
+    logger : logging.Logger
+        logging handler
+    log_dir : str
+        path to where to write log file to
+    """
     check_write_permission_to_log_dir(log_dir)
 
     log_file = os.path.join(log_dir, "s3_upload.log")
@@ -28,20 +38,6 @@ def set_file_handler(logger, log_dir) -> None:
     file_handler.setFormatter(FORMATTER)
 
     logger.addHandler(file_handler)
-    # return file_handler
-
-
-# def set_file_handler(logger, log_file) -> None:
-#     """
-#     _summary_
-
-#     Parameters
-#     ----------
-#     logger : _type_
-#         _description_
-#     log_file : _type_
-#         _description_
-#     """
 
 
 def check_write_permission_to_log_dir(log_dir) -> None:
@@ -60,8 +56,6 @@ def check_write_permission_to_log_dir(log_dir) -> None:
         Raised if path supplied is not writable
     """
     while log_dir:
-        print("foo")
-        print(log_dir)
         if not os.path.exists(log_dir):
             log_dir = Path(log_dir).parent
             continue
