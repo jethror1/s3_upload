@@ -16,9 +16,9 @@ def get_console_handler():
     return console_handler
 
 
-def set_file_handler(logger, log_file) -> None:
-    print(log_file)
-    check_write_permission_to_log_dir(Path(log_file).parent)
+def set_file_handler(logger, log_dir) -> None:
+    print(log_dir)
+    check_write_permission_to_log_dir(log_dir)
 
     file_handler = TimedRotatingFileHandler(
         log_file, when="midnight", backupCount=5
