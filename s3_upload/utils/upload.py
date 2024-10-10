@@ -145,8 +145,7 @@ def _submit_to_pool(pool, func, item_input, items, **kwargs):
 
     This has been abstracted from both multi_thread_upload and
     multi_core_upload to allow for unit testing of the called function
-    raising exceptions, which I could not figure out with the
-    ProcessPool submit calls being local to both functions.
+    raising exceptions that are caught and handled.
 
     In this context we will be calling upload_single_file() once for
     each of files in the given list of files, passing through the S3
