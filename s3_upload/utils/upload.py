@@ -7,7 +7,7 @@ from concurrent.futures import (
 )
 from os import path
 import re
-from typing import List, Union
+from typing import Dict, List, Tuple
 
 import boto3
 from boto3.s3.transfer import TransferConfig
@@ -179,7 +179,7 @@ def _submit_to_pool(pool, func, item_input, items, **kwargs):
 
 def multi_thread_upload(
     files, bucket, remote_path, threads, parent_path
-) -> Union[dict, list]:
+) -> Tuple[Dict[str, str], list]:
     """
     Uploads the given set of `files` to S3 on a single CPU core using
     maximum of n threads.
@@ -255,7 +255,7 @@ def multi_thread_upload(
 
 def multi_core_upload(
     files, bucket, remote_path, cores, threads, parent_path
-) -> Union[dict, list]:
+) -> Tuple[Dict[str, str], list]:
     """
     Call the multi_thread_upload on `files` split across n
     logical CPU cores

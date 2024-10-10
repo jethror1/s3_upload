@@ -94,6 +94,7 @@ def check_upload_state(
 
     log_contents = read_upload_state_log(log_file=upload_log)
 
+    # get the list of already uploaded files from the stored mapping
     uploaded_files = list(log_contents["uploaded_files"].keys())
 
     if log_contents["uploaded"]:
@@ -303,7 +304,7 @@ def read_config(config) -> dict:
         return json.load(fh)
 
 
-def read_upload_state_log(log_file) -> bool:
+def read_upload_state_log(log_file) -> dict:
     """
     Read upload state log to check if run has completed uploading
 
@@ -314,8 +315,8 @@ def read_upload_state_log(log_file) -> bool:
 
     Returns
     -------
-    bool
-        True if run has completed uploading else False
+    dict
+        contents of log file
     """
     log.debug("Reading upload state from log file: %s", log_file)
 
@@ -338,7 +339,7 @@ def read_upload_state_log(log_file) -> bool:
             log_data["total_local_files"] - log_data["total_uploaded_files"],
         )
 
-    return log_data["completed"]
+    return log_data
 
 
 def write_upload_state_to_log(
