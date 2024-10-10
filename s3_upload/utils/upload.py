@@ -294,23 +294,35 @@ def multi_core_upload(
     all_uploaded_files = {}
     all_failed_upload = []
 
-    with ProcessPoolExecutor(max_workers=cores) as exe:
-        concurrent_jobs = {
-            exe.submit(
-                multi_thread_upload,
-                files=sub_files,
-                bucket=bucket,
-                remote_path=remote_path,
-                threads=threads,
-                parent_path=parent_path,
-            ): sub_files
-            for sub_files in files
-        }
+    with ProcessPoolExecutor(max_workers=cores) as executor:
+        concurrent_jobs = _submit_to_pool(
+            pool=executor,
+            func=multi_thread_upload,
+            item_input="files",
+            items=files,
+            bucket=bucket,
+            remote_path=remote_path,
+            parent_path=parent_path,
+            threads=threads,
+        )
+
+        # concurrent_jobs = {
+        #     exe.submit(
+        #         multi_thread_upload,
+        #         files=sub_files,
+        #         bucket=bucket,
+        #         remote_path=remote_path,
+        #         threads=threads,
+        #         parent_path=parent_path,
+        #     ): sub_files
+        #     for sub_files in files
+        # }
 
         for future in as_completed(concurrent_jobs):
             # access returned output as each is returned in any order
             try:
                 uploaded_files, failed_upload = future.result()
+
                 all_uploaded_files = {**all_uploaded_files, **uploaded_files}
                 all_failed_upload.extend(failed_upload)
             except Exception as exc:
@@ -330,4 +342,4 @@ def multi_core_upload(
             len(all_failed_upload),
         )
 
-    return uploaded_files, failed_upload
+    return all_uploaded_files, all_failed_upload
