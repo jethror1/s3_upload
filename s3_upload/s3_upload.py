@@ -1,6 +1,7 @@
 import argparse
 from os import cpu_count, path
 from pathlib import Path
+import sys
 
 from utils.upload import (
     check_aws_access,
@@ -184,10 +185,14 @@ def monitor_directories_for_upload(config):
                 }
             )
 
+    if not to_upload and not partially_uploaded:
+        log.info("No sequencing runs requiring upload found. Exiting now.")
+        sys.exit()
+
     log.info(
         "Found %s new sequencing runs to upload: %s",
         len(to_upload),
-        ", ".join([Path(x["run_dir"]).name for x in to_upload]),
+        ", ".join([x["run_id"] for x in to_upload]),
     )
     if partially_uploaded:
         log.info(
