@@ -12,6 +12,87 @@ from tests import TEST_DATA_DIR
 from s3_upload.utils import io
 
 
+@patch("s3_upload.utils.io.listdir")
+class TestReadSamplesheet(unittest.TestCase):
+    def test_no_samplesheet_returns_none(self, mock_dir):
+        contents = io.read_samplesheet_from_run_directory(TEST_DATA_DIR)
+
+        self.assertEqual(contents, None)
+
+    @patch("s3_upload.utils.io.Path")
+    def test_samplesheet_regex_finds_expected_files(self, mock_path, mock_dir):
+        samplesheets = [
+            "SAMPLESHEET.CSV",
+            "SampleSheet.csv",
+            "Samplesheet.csv",
+            "samplesheet.csv",
+            "experiment_1_samplesheet.csv",
+            "experiment_2_SampleSheet.csv",
+            "experiment_3-samplesheet_attempt_1.csv",
+        ]
+
+        for samplesheet in samplesheets:
+            # mock finding single samplesheet for each name in given dir
+            mock_dir.return_value = [samplesheet]
+            mock_path.return_value.read_text.return_value = "foo\nbar"
+
+            with self.subTest(f"checking regex with {samplesheet}"):
+                contents = io.read_samplesheet_from_run_directory(
+                    TEST_DATA_DIR
+                )
+
+                self.assertEqual(contents, ["foo", "bar"])
+
+    def test_not_samplesheets_do_not_get_selected_by_regex(self, mock_dir):
+        not_samplesheets = [
+            "my_file.csv",
+            "SampleSheet.txt",
+            "samplesheet.tsv",
+            "Samplesheet.xlsx",
+            "samplesheet",
+            "sample_1.csv",
+        ]
+
+        for not_a_samplesheet in not_samplesheets:
+            # mock finding single samplesheet for each name in given dir
+            mock_dir.return_value = [not_a_samplesheet]
+
+            with self.subTest(f"checking regex with {not_a_samplesheet}"):
+                contents = io.read_samplesheet_from_run_directory(
+                    TEST_DATA_DIR
+                )
+
+                self.assertEqual(contents, None)
+
+    @patch("s3_upload.utils.io.Path")
+    def test_two_samplesheets_with_same_contents_returns_contents(
+        self, mock_path, mock_dir
+    ):
+        mock_dir.return_value = ["samplesheet1.csv", "samplesheet2.csv"]
+
+        mock_path.return_value.read_text.side_effect = [
+            "foo\nbar",
+            "foo\nbar",
+        ]
+        contents = io.read_samplesheet_from_run_directory(TEST_DATA_DIR)
+
+        self.assertEqual(contents, ["foo", "bar"])
+
+    @patch("s3_upload.utils.io.Path")
+    def test_two_samplesheets_with_different_contents_returns_none(
+        self, mock_path, mock_dir
+    ):
+        mock_dir.return_value = ["samplesheet1.csv", "samplesheet2.csv"]
+
+        mock_path.return_value.read_text.side_effect = [
+            "foo\nbar",
+            "baz\nblarg",
+        ]
+        contents = io.read_samplesheet_from_run_directory(TEST_DATA_DIR)
+
+        self.assertEqual(contents, None)
+
+
 @patch("s3_upload.utils.io.path.exists")
 class TestWriteUploadStateToLog(unittest.TestCase):
     def tearDown(self):
