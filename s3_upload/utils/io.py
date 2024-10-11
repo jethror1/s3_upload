@@ -1,5 +1,8 @@
 import json
-from os import path
+from os import listdir, path
+from pathlib import Path
+import re
+from typing import Union
 
 from .log import get_logger
 
@@ -23,6 +26,58 @@ def read_config(config) -> dict:
     log.info("Loading config from %s", config)
     with open(config, "r") as fh:
         return json.load(fh)
+
+
+def read_samplesheet_from_run_directory(run_dir) -> Union[list, None]:
+    """
+    Finds samplesheet(s) in the given run directory and returns the
+    contents as a list.
+
+    If more than one samplesheet is found (i.e. when NovaSeqs rename
+    custom named samplesheets to `SampleSheet.csv`), the contents will
+    be compared to ensure they are identical and we can unambiguously
+    tell we have the correct file contents.
+
+    Parameters
+    ----------
+    run_dir : str
+        path to run directory to search
+
+    Returns
+    -------
+    list | None
+        contents of samplesheet as a list if found, else None
+    """
+    log.info("Searching for samplesheet in run directory: %s", run_dir)
+
+    files = listdir(run_dir)
+    files = [
+        re.search(".*sample[-_ ]?sheet.*.csv$", x, re.IGNORECASE)
+        for x in files
+    ]
+    files = [x.group(0) for x in files if x]
+
+    if not files:
+        log.error(
+            "No samplesheet found in %s to determine assay type from", run_dir
+        )
+        return None
+
+    log.info("Found the following samplesheet(s): %s", ", ".join(files))
+
+    all_files_contents = [Path(x).read_text().split("\n") for x in files]
+
+    if not all([all_files_contents[0] == x for x in all_files_contents]):
+        log.error(
+            "Contents of found samplesheets are not identical, can not "
+            "unambiguously determine which to read contents from"
+        )
+
+        return None
+
+    log.info("Using samplesheet %s", files[0])
+
+    return all_files_contents[0]
 
 
 def read_upload_state_log(log_file) -> dict:
