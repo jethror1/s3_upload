@@ -3,6 +3,7 @@ from os import cpu_count, path
 from pathlib import Path
 import sys
 
+from utils.io import read_config, write_upload_state_to_log
 from utils.upload import (
     check_aws_access,
     check_buckets_exist,
@@ -15,7 +16,6 @@ from utils.utils import (
     get_sequencing_file_list,
     filter_uploaded_files,
     read_config,
-    write_upload_state_to_log,
     split_file_list_by_cores,
     verify_args,
     verify_config,
