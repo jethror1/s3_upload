@@ -103,6 +103,43 @@ def check_upload_state(
         return "partial", uploaded_files
 
 
+def check_all_uploadable_samples(samplesheet_contents, sample_pattern) -> bool:
+    """
+    Check if all samples in samplesheet match the provided regex pattern.
+
+    This is to determine if the run is one to be uploaded against the
+    provided pattern(s) from the config file.
+
+    Parameters
+    ----------
+    samplesheet_contents : list
+        contents of samplesheet
+    sample_pattern : str
+        regex pattern for matching against samplenames
+
+    Returns
+    -------
+    bool
+        True if all sample names match the regex, else False
+
+    Raises
+    ------
+    re.error
+        Raised when provided regex pattern is invalid
+    """
+    sample_names = get_samplenames_from_samplesheet(samplesheet_contents)
+
+    try:
+        re.compile(sample_pattern)
+    except re.error as err:
+        log.error(
+            "Invalid regex pattern provided from config: %s", sample_pattern
+        )
+        raise err
+
+    return all([re.search(sample_pattern, x) for x in sample_names])
+
+
 def get_runs_to_upload(
     monitor_dirs, log_dir="/var/log/s3_upload"
 ) -> Tuple[list, dict]:
@@ -164,6 +201,7 @@ def get_runs_to_upload(
                 log.info(
                     "%s has completed uploading and will be skipped", sub_dir
                 )
+                continue
             elif upload_state == "partial":
                 log.info(
                     "%s has partially uploaded (%s files), will continue"
@@ -174,7 +212,7 @@ def get_runs_to_upload(
                 partially_uploaded[sub_dir] = uploaded_files
             else:
                 log.info(
-                    "%s has not started uploading, will be uploaded", sub_dir
+                    "%s has not started uploading, to be uploaded", sub_dir
                 )
                 to_upload.append(sub_dir)
 
@@ -225,6 +263,40 @@ def get_sequencing_file_list(seq_dir, exclude_patterns=None) -> list:
     log.info(f"{len(files)} files found to upload totalling %s", total_size)
 
     return [x[0] for x in files]
+
+
+def get_samplenames_from_samplesheet(contents) -> list:
+    """
+    Parses the samplenames from the provided samplesheet contents
+
+    Parameters
+    ----------
+    contents : list
+        contents of samplesheet
+
+    Returns
+    -------
+    list
+        list of samplenames
+
+    Raises
+    ------
+    AssertionError
+        Raised when single Sample_ID line not found
+    """
+    first_sample_index = [
+        contents.index(l) + 1 for l in contents if l.startswith("Sample_ID")
+    ]
+
+    assert len(first_sample_index) == 1, (
+        "Samplesheet does not contain a unique Sample_ID line to parse sample"
+        f" list from. Sample ID found at: {first_sample_index}"
+    )
+
+    sample_lines = contents[first_sample_index[0] :]
+    sample_names = [x.split(",")[0] for x in sample_lines]
+
+    return sample_names
 
 
 def filter_uploaded_files(local_files, uploaded_files) -> list:
