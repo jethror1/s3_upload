@@ -2,13 +2,12 @@
 
 from glob import glob
 from itertools import zip_longest
-import json
 from os import path, scandir, stat
 from pathlib import Path
 import re
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
-from .io import read_upload_state_log
+from .io import read_upload_state_log, read_samplesheet_from_run_directory
 from .log import get_logger
 
 log = get_logger("s3 upload")
@@ -103,7 +102,9 @@ def check_upload_state(
         return "partial", uploaded_files
 
 
-def check_all_uploadable_samples(samplesheet_contents, sample_pattern) -> bool:
+def check_all_uploadable_samples(
+    samplesheet_contents, sample_pattern
+) -> Union[bool, None]:
     """
     Check if all samples in samplesheet match the provided regex pattern.
 
@@ -119,15 +120,28 @@ def check_all_uploadable_samples(samplesheet_contents, sample_pattern) -> bool:
 
     Returns
     -------
-    bool
-        True if all sample names match the regex, else False
+    bool | None
+        True if all sample names match the regex, else False. None returned
+        if no samplenames are returned from the call to
+        get_samplenames_from_samplesheet.
 
     Raises
     ------
     re.error
         Raised when provided regex pattern is invalid
     """
-    sample_names = get_samplenames_from_samplesheet(samplesheet_contents)
+    log.info(
+        "Checking if sample names match provided pattern(s) from config: %s",
+        sample_pattern,
+    )
+
+    sample_names = get_samplenames_from_samplesheet(
+        contents=samplesheet_contents
+    )
+
+    if not sample_names:
+        log.warning("Failed parsing samplenames from samplesheet")
+        return None
 
     try:
         re.compile(sample_pattern)
@@ -141,7 +155,7 @@ def check_all_uploadable_samples(samplesheet_contents, sample_pattern) -> bool:
 
 
 def get_runs_to_upload(
-    monitor_dirs, log_dir="/var/log/s3_upload"
+    monitor_dirs, log_dir="/var/log/s3_upload", sample_pattern=None
 ) -> Tuple[list, dict]:
     """
     Get completed sequencing runs to upload from specified directories
@@ -153,6 +167,9 @@ def get_runs_to_upload(
         list of directories to check for completed sequencing runs
     log_dir : str
         directory where to read per run upload log files from
+    sample_pattern : str
+        optional regex pattern that all samples from samplesheet must
+        match to be uploadable
 
     Returns
     -------
@@ -190,6 +207,27 @@ def get_runs_to_upload(
                 log.debug(
                     "%s has not completed sequencing and will not be uploaded",
                     sub_dir,
+                )
+                continue
+
+            samplesheet_contents = read_samplesheet_from_run_directory(sub_dir)
+
+            if not samplesheet_contents:
+                log.info(
+                    "Failed parsing samplesheet from %s, run will not be"
+                    " uploaded",
+                    sub_dir,
+                )
+                continue
+
+            if not check_all_uploadable_samples(
+                samplesheet_contents=samplesheet_contents,
+                sample_pattern=sample_pattern,
+            ):
+                log.info(
+                    "Samples do not match provided pattern %s from config"
+                    " file, will not be uploaded",
+                    sample_pattern,
                 )
                 continue
 
@@ -265,7 +303,7 @@ def get_sequencing_file_list(seq_dir, exclude_patterns=None) -> list:
     return [x[0] for x in files]
 
 
-def get_samplenames_from_samplesheet(contents) -> list:
+def get_samplenames_from_samplesheet(contents) -> Union[list, None]:
     """
     Parses the samplenames from the provided samplesheet contents
 
@@ -276,25 +314,26 @@ def get_samplenames_from_samplesheet(contents) -> list:
 
     Returns
     -------
-    list
-        list of samplenames
-
-    Raises
-    ------
-    AssertionError
-        Raised when single Sample_ID line not found
+    list | None
+        list of samplenames if able to be parsed, else None
     """
+    log.debug("Parsing sample names from samplesheet")
     first_sample_index = [
         contents.index(l) + 1 for l in contents if l.startswith("Sample_ID")
     ]
 
-    assert len(first_sample_index) == 1, (
-        "Samplesheet does not contain a unique Sample_ID line to parse sample"
-        f" list from. Sample ID found at: {first_sample_index}"
-    )
+    if not len(first_sample_index) == 1:
+        log.warning(
+            "Samplesheet does not contain a unique Sample_ID line to parse"
+            " sample list from. Sample ID found at: %s",
+            first_sample_index,
+        )
+        return None
 
     sample_lines = contents[first_sample_index[0] :]
     sample_names = [x.split(",")[0] for x in sample_lines]
+
+    log.debug("Parsed %s samplenames: %s", len(sample_names), sample_names)
 
     return sample_names
 
