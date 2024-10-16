@@ -22,7 +22,7 @@ from utils.utils import (
 from utils.log import get_logger, set_file_handler
 
 
-log = get_logger("s3 upload")
+log = get_logger("s3_upload")
 
 
 def parse_args() -> argparse.Namespace:
