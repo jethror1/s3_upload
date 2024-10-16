@@ -124,11 +124,6 @@ def check_all_uploadable_samples(
         True if all sample names match the regex, else False. None returned
         if no samplenames are returned from the call to
         get_samplenames_from_samplesheet.
-
-    Raises
-    ------
-    re.error
-        Raised when provided regex pattern is invalid
     """
     log.info(
         "Checking if sample names match provided pattern(s) from config: %s",
@@ -142,14 +137,6 @@ def check_all_uploadable_samples(
     if not sample_names:
         log.warning("Failed parsing samplenames from samplesheet")
         return None
-
-    try:
-        re.compile(sample_pattern)
-    except re.error as err:
-        log.error(
-            "Invalid regex pattern provided from config: %s", sample_pattern
-        )
-        raise err
 
     return all([re.search(sample_pattern, x) for x in sample_names])
 
@@ -453,6 +440,15 @@ def verify_config(config) -> None:
                         f"{idx}. Expected: {expected_type} | Found "
                         f"{type(monitor.get(key))}"
                     )
+
+        if monitor.get("sample_regex"):
+            try:
+                re.compile(monitor.get("sample_regex"))
+            except Exception:
+                errors.append(
+                    "Invalid regex pattern provided in monitor section "
+                    f"{idx}: {monitor.get('sample_regex')}"
+                )
 
     if errors:
         error_message = (

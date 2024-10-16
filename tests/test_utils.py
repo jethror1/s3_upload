@@ -608,18 +608,20 @@ class TestVerifyConfig(unittest.TestCase):
                     ],
                     "bucket": 1,
                     "remote_path": "/sequencer_3_runs",
+                    "sample_regex": "[assay_1",
                 },
             ],
         }
 
         expected_errors = (
-            "6 errors found in config:\n\tmax_cores must be an"
+            "7 errors found in config:\n\tmax_cores must be an"
             " integer\n\tmax_threads must be an integer\n\trequired parameter"
             " log_dir not defined\n\trequired parameter monitored_directories"
             " missing from monitor section 0\n\trequired parameter remote_path"
             " missing from monitor section 0\n\tbucket not of expected type"
             " from monitor section 1. Expected: <class 'str'> | Found <class"
-            " 'int'>"
+            " 'int'>\n\tInvalid regex pattern provided in monitor section 1:"
+            " [assay_1"
         )
 
         with pytest.raises(RuntimeError, match=re.escape(expected_errors)):
