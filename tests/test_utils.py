@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 import re
 from shutil import rmtree
 from uuid import uuid4
