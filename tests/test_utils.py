@@ -202,7 +202,7 @@ class TestCheckAllUploadableSamples(unittest.TestCase):
 
         self.assertFalse(utils.check_all_uploadable_samples([], "assay_2"))
 
-    def test_parial_matching_samples_returns_false(self, mock_get_names):
+    def test_partial_matching_samples_returns_false(self, mock_get_names):
         mock_get_names.return_value = [
             "sample_a_assay_1",
             "sample_b_assay_2",
@@ -210,6 +210,30 @@ class TestCheckAllUploadableSamples(unittest.TestCase):
         ]
 
         self.assertFalse(utils.check_all_uploadable_samples([], "assay_2"))
+
+    def test_no_sample_names_parsed_logs_warning_and_returns_none(
+        self,
+        mock_get_names,
+    ):
+        """
+        If no samplenames are parsed from the samplesheet with
+        utils.get_samplenames_from_samplesheet we should log a warning
+        and return None
+        """
+        mock_get_names.return_value = None
+
+        with self.subTest("testing log warning"):
+            with self.assertLogs("s3_upload", level="DEBUG") as log:
+                utils.check_all_uploadable_samples([], "assay_2")
+
+                self.assertIn(
+                    "Failed parsing samplenames from samplesheet",
+                    "".join(log.output),
+                )
+
+        with self.subTest("testing None returned"):
+            uploadable = utils.check_all_uploadable_samples([], "assay_2")
+            self.assertEqual(uploadable, None)
 
 
 class TestGetRunsToUpload(unittest.TestCase):
@@ -576,9 +600,7 @@ class TestGetRunsToUpload(unittest.TestCase):
                 self.assertIn(expected_log_message, "".join(log.output))
 
         with self.subTest("testing returned upload state"):
-            uploadable, _ = utils.get_runs_to_upload(
-                [sequencer_output_dir]
-            )
+            uploadable, _ = utils.get_runs_to_upload([sequencer_output_dir])
 
             self.assertEqual(uploadable, [complete_run])
 
