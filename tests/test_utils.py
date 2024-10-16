@@ -165,8 +165,51 @@ class TestCheckUploadState(unittest.TestCase):
             self.assertEqual(uploaded_files, ["file1.txt", "file2.txt"])
 
 
+@patch("s3_upload.utils.utils.get_samplenames_from_samplesheet")
 class TestCheckAllUploadableSamples(unittest.TestCase):
-    pass
+    def test_all_matching_samples_returns_true(self, mock_get_names):
+        mock_get_names.return_value = [
+            "sample_a_assay_1",
+            "sample_b_assay_1",
+            "sample_c_assay_1",
+        ]
+
+        self.assertTrue(utils.check_all_uploadable_samples([], "assay_1"))
+
+    def test_all_matching_samples_returns_true_with_multiple_patterns(
+        self, mock_get_names
+    ):
+        """
+        Test if we have mixed runs and always want to upload against multiple
+        patterns in a single regex
+        """
+        mock_get_names.return_value = [
+            "sample_a_assay_1",
+            "sample_b_assay_2",
+            "sample_c_assay_3",
+        ]
+
+        self.assertTrue(
+            utils.check_all_uploadable_samples([], "assay_1|assay_2|assay_3")
+        )
+
+    def test_no_matching_samples_returns_false(self, mock_get_names):
+        mock_get_names.return_value = [
+            "sample_a_assay_1",
+            "sample_b_assay_1",
+            "sample_c_assay_1",
+        ]
+
+        self.assertFalse(utils.check_all_uploadable_samples([], "assay_2"))
+
+    def test_parial_matching_samples_returns_false(self, mock_get_names):
+        mock_get_names.return_value = [
+            "sample_a_assay_1",
+            "sample_b_assay_2",
+            "sample_c_assay_3",
+        ]
+
+        self.assertFalse(utils.check_all_uploadable_samples([], "assay_2"))
 
 
 class TestGetRunsToUpload(unittest.TestCase):
