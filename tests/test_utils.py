@@ -165,6 +165,10 @@ class TestCheckUploadState(unittest.TestCase):
             self.assertEqual(uploaded_files, ["file1.txt", "file2.txt"])
 
 
+class TestCheckAllUploadableSamples(unittest.TestCase):
+    pass
+
+
 class TestGetRunsToUpload(unittest.TestCase):
     def test_uploadable_directories_correctly_returned(self):
         # TODO - add additional tests to cover calling of check_upload_state
@@ -365,6 +369,75 @@ class TestGetSequencingFileList(unittest.TestCase):
                 self.assertEqual(
                     sorted(returned_file_list), sorted(expected_files)
                 )
+
+
+class TestGetSamplenamesFromSamplesheet(unittest.TestCase):
+    samplesheet_contents = [
+        "[Header],,,,,,",
+        "IEMFileVersion,5,,,,,",
+        "Investigator Name,,,,,,",
+        "Experiment Name,,,,,,",
+        "Date,28/02/2024,,,,,",
+        "Workflow,GenerateFASTQ,,,,,",
+        "Application,NovaSeq FASTQ Only,,,,,",
+        "Instrument Type,NovaSeq,,,,,",
+        "Assay,TruSeq,,,,,",
+        "Index Adapters,96_UDI_PN101308,,,,,",
+        ",,,,,,",
+        "[Reads],,,,,,",
+        "151,,,,,,",
+        "151,,,,,,",
+        ",,,,,,",
+        "[Settings],,,,,,",
+        "Adapter,AGATCGGAAGAGCACACGTCTGAACTCCAGTCA,,,,,",
+        "AdapterRead2,AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT,,,,,",
+        ",,,,,,",
+        "[Data],,,,,,",
+        "Sample_ID,Sample_Name,Sample_Plate,Sample_Well,Index_Plate_Well,index,index2",
+        "sample_a,sample_a,820,A7,A07,ACCAATCTCG,AGTGCCGGAA",
+        "sample_b,sample_b,820,B7,B07,GTCGTGACAC,AGCCATACAA",
+        "sample_c,sample_c,820,C7,C07,TCTCTAGTCG,AATCGATCCA",
+        "sample_d,sample_d,820,D7,D07,ATTACGGTTG,GGTGATTCCG",
+        "sample_e,sample_e,820,E7,E07,CGGTAAGTAA,TAGATAGCTC",
+    ]
+
+    def test_sample_names_correctly_returned(self):
+        parsed_names = utils.get_samplenames_from_samplesheet(
+            contents=self.samplesheet_contents
+        )
+
+        expected_names = [
+            "sample_a",
+            "sample_b",
+            "sample_c",
+            "sample_d",
+            "sample_e",
+        ]
+
+        self.assertEqual(parsed_names, expected_names)
+
+    def test_none_returned_if_sample_id_line_missing_from_samplesheet(self):
+        contents = self.samplesheet_contents.copy()
+        contents = [x for x in contents if not x.startswith("Sample_ID")]
+
+        parsed_names = utils.get_samplenames_from_samplesheet(
+            contents=contents
+        )
+
+        self.assertEqual(parsed_names, None)
+
+    def test_none_returned_if_multiple_sample_id_lines_present(self):
+        contents = self.samplesheet_contents.copy()
+        contents.append(
+            "Sample_ID,Sample_Name,Sample_Plate,Sample_Well,"
+            "Index_Plate_Well,index,index2"
+        )
+
+        parsed_names = utils.get_samplenames_from_samplesheet(
+            contents=contents
+        )
+
+        self.assertEqual(parsed_names, None)
 
 
 class TestFilterUploadedFiles(unittest.TestCase):
