@@ -10,7 +10,7 @@ from typing import List, Tuple, Union
 from .io import read_upload_state_log, read_samplesheet_from_run_directory
 from .log import get_logger
 
-log = get_logger("s3 upload")
+log = get_logger("s3_upload")
 
 
 def check_termination_file_exists(run_dir) -> bool:
@@ -35,13 +35,16 @@ def check_termination_file_exists(run_dir) -> bool:
 
     if path.exists(path.join(run_dir, "CopyComplete.txt")):
         # NovaSeq run that is complete
+        log.debug("Termination file exists => sequencing complete")
         return True
     elif path.exists(path.join(run_dir, "RTAComplete.txt")) or path.exists(
         path.join(run_dir, "RTAComplete.xml")
     ):
         # other type of Illumina sequencer (e.g. MiSeq, NextSeq, HiSeq)
+        log.debug("Termination file exists => sequencing complete")
         return True
     else:
+        log.debug("Termination file does not exist => sequencing incomplete")
         return False
 
 
@@ -179,12 +182,14 @@ def get_runs_to_upload(
         ]
 
         log.debug(
-            "directories found in %s: %s", monitored_dir, sub_directories
+            "directories found in %s: %s",
+            monitored_dir,
+            [Path(x).name for x in sub_directories],
         )
 
         for sub_dir in sub_directories:
             if not check_is_sequencing_run_dir(sub_dir):
-                log.info(
+                log.debug(
                     "%s is not a sequencing run and will not be uploaded",
                     sub_dir,
                 )
@@ -200,23 +205,24 @@ def get_runs_to_upload(
             samplesheet_contents = read_samplesheet_from_run_directory(sub_dir)
 
             if not samplesheet_contents:
-                log.info(
+                log.error(
                     "Failed parsing samplesheet from %s, run will not be"
                     " uploaded",
                     sub_dir,
                 )
                 continue
 
-            if not check_all_uploadable_samples(
-                samplesheet_contents=samplesheet_contents,
-                sample_pattern=sample_pattern,
-            ):
-                log.info(
-                    "Samples do not match provided pattern %s from config"
-                    " file, will not be uploaded",
-                    sample_pattern,
-                )
-                continue
+            if sample_pattern:
+                if not check_all_uploadable_samples(
+                    samplesheet_contents=samplesheet_contents,
+                    sample_pattern=sample_pattern,
+                ):
+                    log.info(
+                        "Samples do not match provided pattern %s from config"
+                        " file, run will not be uploaded",
+                        sample_pattern,
+                    )
+                    continue
 
             upload_state, uploaded_files = check_upload_state(
                 run_dir=sub_dir, log_dir=log_dir
