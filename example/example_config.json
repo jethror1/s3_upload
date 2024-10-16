@@ -10,7 +10,8 @@
                 "/absolute/path/to/sequencer_2"
             ],
             "bucket": "bucket_A",
-            "remote_path": "/"
+            "remote_path": "/",
+            "sample_regex": "_assay_1_code_|_assay_code_2_"
         },
         {
             "monitored_directories": [
