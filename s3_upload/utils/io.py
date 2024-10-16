@@ -65,7 +65,13 @@ def read_samplesheet_from_run_directory(run_dir) -> Union[list, None]:
 
     log.info("Found the following samplesheet(s): %s", ", ".join(files))
 
-    all_files_contents = [Path(x).read_text().split("\n") for x in files]
+    # read all files in, split lines to lists and ensure trailing new line
+    # dropped to not result in empty string in list
+    all_files_contents = [Path(x).read_text() for x in files]
+
+    all_files_contents = [
+        re.sub(r"\n$", "", x).split("\n") for x in all_files_contents
+    ]
 
     if not all([all_files_contents[0] == x for x in all_files_contents]):
         log.error(
