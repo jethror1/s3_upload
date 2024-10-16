@@ -21,6 +21,7 @@ class TestReadSamplesheet(unittest.TestCase):
 
     @patch("s3_upload.utils.io.Path")
     def test_samplesheet_regex_finds_expected_files(self, mock_path, mock_dir):
+        """Test when single valid samplesheet found we return the contents"""
         samplesheets = [
             "SAMPLESHEET.CSV",
             "SampleSheet.csv",
@@ -44,6 +45,9 @@ class TestReadSamplesheet(unittest.TestCase):
                 self.assertEqual(contents, ["foo", "bar"])
 
     def test_not_samplesheets_do_not_get_selected_by_regex(self, mock_dir):
+        """
+        Test if no samplesheet is found against the regex that we return None
+        """
         not_samplesheets = [
             "my_file.csv",
             "SampleSheet.txt",
