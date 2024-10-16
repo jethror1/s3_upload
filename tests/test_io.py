@@ -1,19 +1,14 @@
 import json
 import os
-from pathlib import Path
-import re
-from shutil import rmtree
 import unittest
 from unittest.mock import patch
-
-import pytest
 
 from tests import TEST_DATA_DIR
 from s3_upload.utils import io
 
 
 @patch("s3_upload.utils.io.listdir")
-class TestReadSamplesheet(unittest.TestCase):
+class TestReadSamplesheetFromRunDirectory(unittest.TestCase):
     def test_no_samplesheet_returns_none(self, mock_dir):
         contents = io.read_samplesheet_from_run_directory(TEST_DATA_DIR)
 
@@ -95,6 +90,26 @@ class TestReadSamplesheet(unittest.TestCase):
         contents = io.read_samplesheet_from_run_directory(TEST_DATA_DIR)
 
         self.assertEqual(contents, None)
+
+    @patch("s3_upload.utils.io.Path")
+    def test_trailing_new_lines_removed_from_returned_contents(
+        self, mock_path, mock_dir
+    ):
+        """
+        Trailing new lines in the file will result in empty strings in
+        the returned contents list, ensure they are correctly removed when
+        reading in
+        """
+        mock_dir.return_value = ["samplesheet1.csv"]
+        mock_path.return_value.read_text.return_value = (
+            "Sample_ID\nsample_a\nsample_b\nsample_n\n\n"
+        )
+
+        contents = io.read_samplesheet_from_run_directory(TEST_DATA_DIR)
+
+        expected_contents = ["Sample_ID", "sample_a", "sample_b", "sample_n"]
+
+        self.assertEqual(contents, expected_contents)
 
 
 @patch("s3_upload.utils.io.path.exists")
