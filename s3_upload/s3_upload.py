@@ -15,7 +15,6 @@ from utils.utils import (
     get_runs_to_upload,
     get_sequencing_file_list,
     filter_uploaded_files,
-    read_config,
     split_file_list_by_cores,
     verify_args,
     verify_config,
@@ -159,7 +158,9 @@ def monitor_directories_for_upload(config):
     # and build a dict per run with config of where to upload
     for monitor_dir_config in config["monitor"]:
         completed_runs, partially_uploaded = get_runs_to_upload(
-            monitor_dir_config["monitored_directories"], log_dir=log_dir
+            monitor_dir_config.get("monitored_directories"),
+            log_dir=log_dir,
+            sample_pattern=monitor_dir_config.get("sample_regex"),
         )
 
         for run_dir in completed_runs:
