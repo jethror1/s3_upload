@@ -17,7 +17,7 @@ from botocore import exceptions as s3_exceptions
 from .log import get_logger
 
 
-log = get_logger("s3 upload")
+log = get_logger("s3_upload")
 
 
 def check_aws_access():

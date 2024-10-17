@@ -1,8 +1,7 @@
-import json
 import os
-from pathlib import Path
 import re
 from shutil import rmtree
+from uuid import uuid4
 import unittest
 from unittest.mock import patch
 
@@ -165,52 +164,411 @@ class TestCheckUploadState(unittest.TestCase):
             self.assertEqual(uploaded_files, ["file1.txt", "file2.txt"])
 
 
-class TestGetRunsToUpload(unittest.TestCase):
-    def test_uploadable_directories_correctly_returned(self):
-        # TODO - add additional tests to cover calling of check_upload_state
-        test_run_dir_structure = [
-            # valid incomplete NovaSeq run -> not to upload
-            "seq1/run1/RunInfo.xml",
-            # valid complete NovaSeq run -> upload
-            "seq1/run2/RunInfo.xml",
-            "seq1/run2/CopyComplete.txt",
-            # valid complete other sequencer run -> upload
-            "seq2/run3/RunInfo.xml",
-            "seq2/run3/RTAComplete.txt",
-            # other non run directory -> not to upload
-            "seq2/some_dir/file1.txt",
+@patch("s3_upload.utils.utils.get_samplenames_from_samplesheet")
+class TestCheckAllUploadableSamples(unittest.TestCase):
+    def test_all_matching_samples_returns_true(self, mock_get_names):
+        mock_get_names.return_value = [
+            "sample_a_assay_1",
+            "sample_b_assay_1",
+            "sample_c_assay_1",
         ]
 
-        test_run_dir_structure = [
-            os.path.join(TEST_DATA_DIR, x) for x in test_run_dir_structure
+        self.assertTrue(utils.check_all_uploadable_samples([], "assay_1"))
+
+    def test_all_matching_samples_returns_true_with_multiple_patterns(
+        self, mock_get_names
+    ):
+        """
+        Test if we have mixed runs and always want to upload against multiple
+        patterns in a single regex
+        """
+        mock_get_names.return_value = [
+            "sample_a_assay_1",
+            "sample_b_assay_2",
+            "sample_c_assay_3",
         ]
 
-        # create the test files and dir structure
-        for test_file in test_run_dir_structure:
-            os.makedirs(
-                Path(test_file).parent,
-                exist_ok=True,
-            )
-            open(test_file, "w").close()
-
-        returned_upload_dirs, _ = utils.get_runs_to_upload(
-            monitor_dirs=[
-                os.path.join(TEST_DATA_DIR, "seq1"),
-                os.path.join(TEST_DATA_DIR, "seq2"),
-            ]
+        self.assertTrue(
+            utils.check_all_uploadable_samples([], "assay_1|assay_2|assay_3")
         )
 
-        valid_upload_dirs = [
-            os.path.join(TEST_DATA_DIR, "seq1/run2"),
-            os.path.join(TEST_DATA_DIR, "seq2/run3"),
+    def test_no_matching_samples_returns_false(self, mock_get_names):
+        mock_get_names.return_value = [
+            "sample_a_assay_1",
+            "sample_b_assay_1",
+            "sample_c_assay_1",
         ]
 
-        with self.subTest():
-            self.assertEqual(valid_upload_dirs, returned_upload_dirs)
+        self.assertFalse(utils.check_all_uploadable_samples([], "assay_2"))
 
-        # clear out the created test directories
-        rmtree(os.path.join(TEST_DATA_DIR, "seq1"))
-        rmtree(os.path.join(TEST_DATA_DIR, "seq2"))
+    def test_partial_matching_samples_returns_false(self, mock_get_names):
+        mock_get_names.return_value = [
+            "sample_a_assay_1",
+            "sample_b_assay_2",
+            "sample_c_assay_3",
+        ]
+
+        self.assertFalse(utils.check_all_uploadable_samples([], "assay_2"))
+
+    def test_no_sample_names_parsed_logs_warning_and_returns_none(
+        self,
+        mock_get_names,
+    ):
+        """
+        If no samplenames are parsed from the samplesheet with
+        utils.get_samplenames_from_samplesheet we should log a warning
+        and return None
+        """
+        mock_get_names.return_value = None
+
+        with self.subTest("testing log warning"):
+            with self.assertLogs("s3_upload", level="DEBUG") as log:
+                utils.check_all_uploadable_samples([], "assay_2")
+
+                self.assertIn(
+                    "Failed parsing samplenames from samplesheet",
+                    "".join(log.output),
+                )
+
+        with self.subTest("testing None returned"):
+            uploadable = utils.check_all_uploadable_samples([], "assay_2")
+            self.assertEqual(uploadable, None)
+
+
+class TestGetRunsToUpload(unittest.TestCase):
+    def test_no_sub_directories_in_provided_dir_does_not_raise_error(self):
+        # make empty example sequencer output dir to monitor
+        random_named_empty_dir = os.path.join(TEST_DATA_DIR, uuid4().hex)
+        os.makedirs(
+            random_named_empty_dir,
+            exist_ok=True,
+        )
+
+        with self.subTest():
+            to_upload, partial_upload = utils.get_runs_to_upload(
+                [random_named_empty_dir]
+            )
+            self.assertTrue(to_upload == [] and partial_upload == {})
+
+        rmtree(random_named_empty_dir)
+
+    def test_non_sequencing_directories_are_skipped(self):
+        sequencer_output_dir = os.path.join(TEST_DATA_DIR, uuid4().hex)
+        not_a_sequencing_dir = os.path.join(sequencer_output_dir, "myRun")
+        os.makedirs(
+            not_a_sequencing_dir,
+            exist_ok=True,
+        )
+
+        to_upload, partial_upload = utils.get_runs_to_upload(
+            [sequencer_output_dir]
+        )
+
+        with self.subTest("testing outputs are empty"):
+            self.assertTrue(to_upload == [] and partial_upload == {})
+
+        with self.subTest("testing log message"):
+            with self.assertLogs("s3_upload", level="DEBUG") as log:
+                utils.get_runs_to_upload([sequencer_output_dir])
+
+                expected_log_message = (
+                    f"{not_a_sequencing_dir} is not a sequencing run and will"
+                    " not be uploaded"
+                )
+
+                self.assertTrue(expected_log_message in "".join(log.output))
+
+        rmtree(sequencer_output_dir)
+
+    def test_incomplete_sequencing_runs_are_skipped(self):
+        """
+        Incomplete run determined from presence of just having RunInfo.xml
+        file and no termination files
+        """
+        sequencer_output_dir = os.path.join(TEST_DATA_DIR, uuid4().hex)
+        ongoing_run = os.path.join(
+            sequencer_output_dir, "16102023_A01295_001_ABC123"
+        )
+        os.makedirs(
+            ongoing_run,
+            exist_ok=True,
+        )
+        open(os.path.join(ongoing_run, "RunInfo.xml"), "w").close()
+
+        to_upload, partial_upload = utils.get_runs_to_upload(
+            [sequencer_output_dir]
+        )
+
+        with self.subTest("testing outputs are empty"):
+            self.assertTrue(to_upload == [] and partial_upload == {})
+
+        with self.subTest("testing log message"):
+            with self.assertLogs("s3_upload", level="DEBUG") as log:
+                utils.get_runs_to_upload([sequencer_output_dir])
+
+                expected_log_message = (
+                    f"{ongoing_run} has not completed sequencing and will not"
+                    " be uploaded"
+                )
+
+                self.assertTrue(expected_log_message in "".join(log.output))
+
+        rmtree(sequencer_output_dir)
+
+    @patch("s3_upload.utils.utils.check_upload_state")
+    @patch("s3_upload.utils.utils.check_all_uploadable_samples")
+    @patch("s3_upload.utils.utils.read_samplesheet_from_run_directory")
+    def test_complete_sequencing_runs_are_identified(
+        self, mock_read, mock_uploadable, mock_state
+    ):
+        """
+        Complete runs are determined from presence of CopyComplete.txt
+        (for NovaSeqs) or RTAComplete.txt / RTAComplete.xml for other
+        sequencers.
+
+        Test that if these are present the run is picked up for upload
+        (without checking for samplesheet or upload state)
+        """
+        mock_read.return_value = ["some_samplesheet_contents"]
+        mock_uploadable.return_value = True
+        mock_state.return_value = ("uploaded", [])
+
+        sequencer_output_dir = os.path.join(TEST_DATA_DIR, uuid4().hex)
+        complete_run = os.path.join(
+            sequencer_output_dir, "16102023_A01295_001_ABC123"
+        )
+        os.makedirs(
+            complete_run,
+            exist_ok=True,
+        )
+        open(os.path.join(complete_run, "RunInfo.xml"), "w").close()
+
+        termination_files = [
+            "CopyComplete.txt",
+            "RTAComplete.txt",
+            "RTAComplete.xml",
+        ]
+
+        for termination_file in termination_files:
+            open(os.path.join(complete_run, termination_file), "w").close()
+
+            with self.subTest("testing log message"):
+                with self.assertLogs("s3_upload", level="DEBUG") as log:
+                    utils.get_runs_to_upload([sequencer_output_dir])
+
+                    expected_log_message = (
+                        "Termination file exists => sequencing complete"
+                    )
+
+                    self.assertIn(expected_log_message, "".join(log.output))
+
+            os.remove(os.path.join(complete_run, termination_file))
+
+        rmtree(sequencer_output_dir)
+
+    @patch("s3_upload.utils.utils.read_samplesheet_from_run_directory")
+    def test_invalid_samplesheet_logged_and_continues(self, mock_read):
+        """
+        Test when None is returned when reading samplesheet contents
+        that the error is logged and continues
+        """
+        mock_read.return_value = None
+        # mock_uploadable.return_value = True
+        # mock_state.return_value = ("uploaded", [])
+
+        sequencer_output_dir = os.path.join(TEST_DATA_DIR, uuid4().hex)
+        complete_run = os.path.join(
+            sequencer_output_dir, "16102023_A01295_001_ABC123"
+        )
+        os.makedirs(
+            complete_run,
+            exist_ok=True,
+        )
+        open(os.path.join(complete_run, "RunInfo.xml"), "w").close()
+        open(os.path.join(complete_run, "CopyComplete.txt"), "w").close()
+
+        with self.subTest("testing log message"):
+            with self.assertLogs("s3_upload", level="DEBUG") as log:
+                utils.get_runs_to_upload([sequencer_output_dir])
+
+                expected_log_message = (
+                    f"Failed parsing samplesheet from {complete_run}, run will"
+                    " not be uploaded"
+                )
+
+                self.assertIn(expected_log_message, "".join(log.output))
+
+        rmtree(sequencer_output_dir)
+
+    @patch("s3_upload.utils.utils.check_all_uploadable_samples")
+    @patch("s3_upload.utils.utils.read_samplesheet_from_run_directory")
+    def test_runs_with_samples_not_matching_pattern_are_skipped(
+        self, mock_read, mock_uploadable
+    ):
+        """
+        Check when not all samples match the config sample regex pattern
+        that this is logged and continues
+        """
+        mock_read.return_value = ["some_samplesheet_contents"]
+        mock_uploadable.return_value = False
+
+        sequencer_output_dir = os.path.join(TEST_DATA_DIR, uuid4().hex)
+        complete_run = os.path.join(
+            sequencer_output_dir, "16102023_A01295_001_ABC123"
+        )
+        os.makedirs(
+            complete_run,
+            exist_ok=True,
+        )
+        open(os.path.join(complete_run, "RunInfo.xml"), "w").close()
+        open(os.path.join(complete_run, "CopyComplete.txt"), "w").close()
+
+        # with self.subTest("testing log message"):
+        with self.assertLogs("s3_upload", level="DEBUG") as log:
+            utils.get_runs_to_upload(
+                [sequencer_output_dir], sample_pattern="assay_1"
+            )
+
+            expected_log_message = (
+                "Samples do not match provided pattern assay_1 from config"
+                " file, run will not be uploaded"
+            )
+
+            self.assertIn(expected_log_message, "".join(log.output))
+
+        rmtree(sequencer_output_dir)
+
+    @patch("s3_upload.utils.utils.check_upload_state")
+    @patch("s3_upload.utils.utils.check_all_uploadable_samples")
+    @patch("s3_upload.utils.utils.read_samplesheet_from_run_directory")
+    def test_runs_in_completed_upload_state_skipped(
+        self, mock_read, mock_uploadable, mock_state
+    ):
+        """
+        Test checking the upload state of completed upload runs skips
+        adding the runs to be uploaded
+        """
+        mock_read.return_value = ["some_samplesheet_contents"]
+        mock_uploadable.return_value = True
+        mock_state.return_value = ("uploaded", [])
+
+        sequencer_output_dir = os.path.join(TEST_DATA_DIR, uuid4().hex)
+        complete_run = os.path.join(
+            sequencer_output_dir, "16102023_A01295_001_ABC123"
+        )
+        os.makedirs(
+            complete_run,
+            exist_ok=True,
+        )
+        open(os.path.join(complete_run, "RunInfo.xml"), "w").close()
+        open(os.path.join(complete_run, "CopyComplete.txt"), "w").close()
+
+        with self.subTest("testing upload state: uploaded"):
+            with self.assertLogs("s3_upload", level="DEBUG") as log:
+                utils.get_runs_to_upload([sequencer_output_dir])
+
+                expected_log_message = (
+                    f"{complete_run} has completed uploading and will be"
+                    " skipped"
+                )
+
+                self.assertIn(expected_log_message, "".join(log.output))
+
+        with self.subTest("testing if uploaded runs are skipped"):
+            upload_state = utils.get_runs_to_upload([sequencer_output_dir])
+
+            self.assertEqual(upload_state, ([], {}))
+
+        rmtree(sequencer_output_dir)
+
+    @patch("s3_upload.utils.utils.check_upload_state")
+    @patch("s3_upload.utils.utils.check_all_uploadable_samples")
+    @patch("s3_upload.utils.utils.read_samplesheet_from_run_directory")
+    def test_runs_in_partial_upload_state_are_picked_up_to_continue(
+        self, mock_read, mock_uploadable, mock_state
+    ):
+        """
+        Test checking the upload state of partially uploaded runs that
+        these are returned
+        """
+        mock_read.return_value = ["some_samplesheet_contents"]
+        mock_uploadable.return_value = True
+        mock_state.return_value = ("partial", ["RunInfo.xml"])
+
+        sequencer_output_dir = os.path.join(TEST_DATA_DIR, uuid4().hex)
+        complete_run = os.path.join(
+            sequencer_output_dir, "16102023_A01295_001_ABC123"
+        )
+        os.makedirs(
+            complete_run,
+            exist_ok=True,
+        )
+        open(os.path.join(complete_run, "RunInfo.xml"), "w").close()
+        open(os.path.join(complete_run, "CopyComplete.txt"), "w").close()
+
+        with self.subTest("testing upload state: partial"):
+            with self.assertLogs("s3_upload", level="DEBUG") as log:
+                utils.get_runs_to_upload([sequencer_output_dir])
+
+                expected_log_message = (
+                    f"{complete_run} has partially uploaded (1 files), will"
+                    " continue uploading"
+                )
+
+                self.assertIn(expected_log_message, "".join(log.output))
+
+        with self.subTest("testing returned upload state"):
+            _, partial_upload = utils.get_runs_to_upload(
+                [sequencer_output_dir]
+            )
+
+            expected_state = {complete_run: ["RunInfo.xml"]}
+
+            self.assertDictEqual(partial_upload, expected_state)
+
+        rmtree(sequencer_output_dir)
+
+    @patch("s3_upload.utils.utils.check_upload_state")
+    @patch("s3_upload.utils.utils.check_all_uploadable_samples")
+    @patch("s3_upload.utils.utils.read_samplesheet_from_run_directory")
+    def test_runs_in_not_uploaded_upload_state_are_picked_up_to_upload(
+        self, mock_read, mock_uploadable, mock_state
+    ):
+        """
+        Test checking the upload state of new runs that they are picked
+        up to upload
+        """
+        mock_read.return_value = ["some_samplesheet_contents"]
+        mock_uploadable.return_value = True
+        mock_state.return_value = ("new", [])
+
+        sequencer_output_dir = os.path.join(TEST_DATA_DIR, uuid4().hex)
+        complete_run = os.path.join(
+            sequencer_output_dir, "16102023_A01295_001_ABC123"
+        )
+        os.makedirs(
+            complete_run,
+            exist_ok=True,
+        )
+        open(os.path.join(complete_run, "RunInfo.xml"), "w").close()
+        open(os.path.join(complete_run, "CopyComplete.txt"), "w").close()
+
+        with self.subTest("testing upload state: new"):
+            with self.assertLogs("s3_upload", level="DEBUG") as log:
+                utils.get_runs_to_upload([sequencer_output_dir])
+
+                expected_log_message = (
+                    f"{complete_run} has not started uploading, to be uploaded"
+                )
+
+                self.assertIn(expected_log_message, "".join(log.output))
+
+        with self.subTest("testing returned upload state"):
+            uploadable, _ = utils.get_runs_to_upload([sequencer_output_dir])
+
+            self.assertEqual(uploadable, [complete_run])
+
+        rmtree(sequencer_output_dir)
 
 
 class TestGetSequencingFileList(unittest.TestCase):
@@ -367,6 +725,75 @@ class TestGetSequencingFileList(unittest.TestCase):
                 )
 
 
+class TestGetSamplenamesFromSamplesheet(unittest.TestCase):
+    samplesheet_contents = [
+        "[Header],,,,,,",
+        "IEMFileVersion,5,,,,,",
+        "Investigator Name,,,,,,",
+        "Experiment Name,,,,,,",
+        "Date,28/02/2024,,,,,",
+        "Workflow,GenerateFASTQ,,,,,",
+        "Application,NovaSeq FASTQ Only,,,,,",
+        "Instrument Type,NovaSeq,,,,,",
+        "Assay,TruSeq,,,,,",
+        "Index Adapters,96_UDI_PN101308,,,,,",
+        ",,,,,,",
+        "[Reads],,,,,,",
+        "151,,,,,,",
+        "151,,,,,,",
+        ",,,,,,",
+        "[Settings],,,,,,",
+        "Adapter,AGATCGGAAGAGCACACGTCTGAACTCCAGTCA,,,,,",
+        "AdapterRead2,AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT,,,,,",
+        ",,,,,,",
+        "[Data],,,,,,",
+        "Sample_ID,Sample_Name,Sample_Plate,Sample_Well,Index_Plate_Well,index,index2",
+        "sample_a,sample_a,820,A7,A07,ACCAATCTCG,AGTGCCGGAA",
+        "sample_b,sample_b,820,B7,B07,GTCGTGACAC,AGCCATACAA",
+        "sample_c,sample_c,820,C7,C07,TCTCTAGTCG,AATCGATCCA",
+        "sample_d,sample_d,820,D7,D07,ATTACGGTTG,GGTGATTCCG",
+        "sample_e,sample_e,820,E7,E07,CGGTAAGTAA,TAGATAGCTC",
+    ]
+
+    def test_sample_names_correctly_returned(self):
+        parsed_names = utils.get_samplenames_from_samplesheet(
+            contents=self.samplesheet_contents
+        )
+
+        expected_names = [
+            "sample_a",
+            "sample_b",
+            "sample_c",
+            "sample_d",
+            "sample_e",
+        ]
+
+        self.assertEqual(parsed_names, expected_names)
+
+    def test_none_returned_if_sample_id_line_missing_from_samplesheet(self):
+        contents = self.samplesheet_contents.copy()
+        contents = [x for x in contents if not x.startswith("Sample_ID")]
+
+        parsed_names = utils.get_samplenames_from_samplesheet(
+            contents=contents
+        )
+
+        self.assertEqual(parsed_names, None)
+
+    def test_none_returned_if_multiple_sample_id_lines_present(self):
+        contents = self.samplesheet_contents.copy()
+        contents.append(
+            "Sample_ID,Sample_Name,Sample_Plate,Sample_Well,"
+            "Index_Plate_Well,index,index2"
+        )
+
+        parsed_names = utils.get_samplenames_from_samplesheet(
+            contents=contents
+        )
+
+        self.assertEqual(parsed_names, None)
+
+
 class TestFilterUploadedFiles(unittest.TestCase):
     def test_correct_file_list_returned(self):
         local_files = ["file1.txt", "file2.txt", "file3.txt"]
@@ -492,18 +919,20 @@ class TestVerifyConfig(unittest.TestCase):
                     ],
                     "bucket": 1,
                     "remote_path": "/sequencer_3_runs",
+                    "sample_regex": "[assay_1",
                 },
             ],
         }
 
         expected_errors = (
-            "6 errors found in config:\n\tmax_cores must be an"
+            "7 errors found in config:\n\tmax_cores must be an"
             " integer\n\tmax_threads must be an integer\n\trequired parameter"
             " log_dir not defined\n\trequired parameter monitored_directories"
             " missing from monitor section 0\n\trequired parameter remote_path"
             " missing from monitor section 0\n\tbucket not of expected type"
             " from monitor section 1. Expected: <class 'str'> | Found <class"
-            " 'int'>"
+            " 'int'>\n\tInvalid regex pattern provided in monitor section 1:"
+            " [assay_1"
         )
 
         with pytest.raises(RuntimeError, match=re.escape(expected_errors)):

@@ -2,16 +2,15 @@
 
 from glob import glob
 from itertools import zip_longest
-import json
 from os import path, scandir, stat
 from pathlib import Path
 import re
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
-from .io import read_upload_state_log
+from .io import read_upload_state_log, read_samplesheet_from_run_directory
 from .log import get_logger
 
-log = get_logger("s3 upload")
+log = get_logger("s3_upload")
 
 
 def check_termination_file_exists(run_dir) -> bool:
@@ -36,13 +35,16 @@ def check_termination_file_exists(run_dir) -> bool:
 
     if path.exists(path.join(run_dir, "CopyComplete.txt")):
         # NovaSeq run that is complete
+        log.debug("Termination file exists => sequencing complete")
         return True
     elif path.exists(path.join(run_dir, "RTAComplete.txt")) or path.exists(
         path.join(run_dir, "RTAComplete.xml")
     ):
         # other type of Illumina sequencer (e.g. MiSeq, NextSeq, HiSeq)
+        log.debug("Termination file exists => sequencing complete")
         return True
     else:
+        log.debug("Termination file does not exist => sequencing incomplete")
         return False
 
 
@@ -103,8 +105,47 @@ def check_upload_state(
         return "partial", uploaded_files
 
 
+def check_all_uploadable_samples(
+    samplesheet_contents, sample_pattern
+) -> Union[bool, None]:
+    """
+    Check if all samples in samplesheet match the provided regex pattern.
+
+    This is to determine if the run is one to be uploaded against the
+    provided pattern(s) from the config file.
+
+    Parameters
+    ----------
+    samplesheet_contents : list
+        contents of samplesheet
+    sample_pattern : str
+        regex pattern for matching against samplenames
+
+    Returns
+    -------
+    bool | None
+        True if all sample names match the regex, else False. None returned
+        if no samplenames are returned from the call to
+        get_samplenames_from_samplesheet.
+    """
+    log.info(
+        "Checking if sample names match provided pattern(s) from config: %s",
+        sample_pattern,
+    )
+
+    sample_names = get_samplenames_from_samplesheet(
+        contents=samplesheet_contents
+    )
+
+    if not sample_names:
+        log.warning("Failed parsing samplenames from samplesheet")
+        return None
+
+    return all([re.search(sample_pattern, x) for x in sample_names])
+
+
 def get_runs_to_upload(
-    monitor_dirs, log_dir="/var/log/s3_upload"
+    monitor_dirs, log_dir="/var/log/s3_upload", sample_pattern=None
 ) -> Tuple[list, dict]:
     """
     Get completed sequencing runs to upload from specified directories
@@ -116,6 +157,9 @@ def get_runs_to_upload(
         list of directories to check for completed sequencing runs
     log_dir : str
         directory where to read per run upload log files from
+    sample_pattern : str
+        optional regex pattern that all samples from samplesheet must
+        match to be uploadable
 
     Returns
     -------
@@ -138,12 +182,14 @@ def get_runs_to_upload(
         ]
 
         log.debug(
-            "directories found in %s: %s", monitored_dir, sub_directories
+            "directories found in %s: %s",
+            monitored_dir,
+            [Path(x).name for x in sub_directories],
         )
 
         for sub_dir in sub_directories:
             if not check_is_sequencing_run_dir(sub_dir):
-                log.info(
+                log.debug(
                     "%s is not a sequencing run and will not be uploaded",
                     sub_dir,
                 )
@@ -156,6 +202,28 @@ def get_runs_to_upload(
                 )
                 continue
 
+            samplesheet_contents = read_samplesheet_from_run_directory(sub_dir)
+
+            if not samplesheet_contents:
+                log.error(
+                    "Failed parsing samplesheet from %s, run will not be"
+                    " uploaded",
+                    sub_dir,
+                )
+                continue
+
+            if sample_pattern:
+                if not check_all_uploadable_samples(
+                    samplesheet_contents=samplesheet_contents,
+                    sample_pattern=sample_pattern,
+                ):
+                    log.info(
+                        "Samples do not match provided pattern %s from config"
+                        " file, run will not be uploaded",
+                        sample_pattern,
+                    )
+                    continue
+
             upload_state, uploaded_files = check_upload_state(
                 run_dir=sub_dir, log_dir=log_dir
             )
@@ -164,6 +232,7 @@ def get_runs_to_upload(
                 log.info(
                     "%s has completed uploading and will be skipped", sub_dir
                 )
+                continue
             elif upload_state == "partial":
                 log.info(
                     "%s has partially uploaded (%s files), will continue"
@@ -174,7 +243,7 @@ def get_runs_to_upload(
                 partially_uploaded[sub_dir] = uploaded_files
             else:
                 log.info(
-                    "%s has not started uploading, will be uploaded", sub_dir
+                    "%s has not started uploading, to be uploaded", sub_dir
                 )
                 to_upload.append(sub_dir)
 
@@ -225,6 +294,41 @@ def get_sequencing_file_list(seq_dir, exclude_patterns=None) -> list:
     log.info(f"{len(files)} files found to upload totalling %s", total_size)
 
     return [x[0] for x in files]
+
+
+def get_samplenames_from_samplesheet(contents) -> Union[list, None]:
+    """
+    Parses the samplenames from the provided samplesheet contents
+
+    Parameters
+    ----------
+    contents : list
+        contents of samplesheet
+
+    Returns
+    -------
+    list | None
+        list of samplenames if able to be parsed, else None
+    """
+    log.debug("Parsing sample names from samplesheet")
+    first_sample_index = [
+        contents.index(l) + 1 for l in contents if l.startswith("Sample_ID")
+    ]
+
+    if not len(first_sample_index) == 1:
+        log.warning(
+            "Samplesheet does not contain a unique Sample_ID line to parse"
+            " sample list from. Sample ID found at: %s",
+            first_sample_index,
+        )
+        return None
+
+    sample_lines = contents[first_sample_index[0] :]
+    sample_names = [x.split(",")[0] for x in sample_lines]
+
+    log.debug("Parsed %s samplenames: %s", len(sample_names), sample_names)
+
+    return sample_names
 
 
 def filter_uploaded_files(local_files, uploaded_files) -> list:
@@ -342,6 +446,15 @@ def verify_config(config) -> None:
                         f"{idx}. Expected: {expected_type} | Found "
                         f"{type(monitor.get(key))}"
                     )
+
+        if monitor.get("sample_regex"):
+            try:
+                re.compile(monitor.get("sample_regex"))
+            except Exception:
+                errors.append(
+                    "Invalid regex pattern provided in monitor section "
+                    f"{idx}: {monitor.get('sample_regex')}"
+                )
 
     if errors:
         error_message = (
