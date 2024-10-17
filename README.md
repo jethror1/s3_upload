@@ -31,6 +31,7 @@ Available inputs for `upload`:
 
 Available inputs for `monitor`:
 * `--config`: path to JSON config file for monitoring (see below)
+* `--dry_run` (optional): calls everything except the actual upload to check what runs would be uploaded
 
 ## Config
 

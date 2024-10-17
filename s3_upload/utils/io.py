@@ -6,7 +6,7 @@ from typing import Union
 
 from .log import get_logger
 
-log = get_logger("s3 upload")
+log = get_logger("s3_upload")
 
 
 def read_config(config) -> dict:
@@ -103,7 +103,7 @@ def read_upload_state_log(log_file) -> dict:
     log.debug("Reading upload state from log file: %s", log_file)
 
     with open(log_file) as fh:
-        log_data = json.loads(fh)
+        log_data = json.load(fh)
 
     uploaded = (
         "finished upload" if log_data["completed"] else "incomplete upload"
