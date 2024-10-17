@@ -112,6 +112,43 @@ class TestReadSamplesheetFromRunDirectory(unittest.TestCase):
         self.assertEqual(contents, expected_contents)
 
 
+class TestReadUploadStateLog(unittest.TestCase):
+    def test_file_contents_returned_correctly(self):
+        upload_log = os.path.join(
+            TEST_DATA_DIR, "complete_run_upload.log.json"
+        )
+
+        read_contents = io.read_upload_state_log(upload_log)
+
+        expected_contents = {
+            "run_id": "181024_A01295_001_ABC123",
+            "run path": "/genetics/181024_A01295_001_ABC123",
+            "completed": True,
+            "total_local_files": 2,
+            "total_uploaded_files": 2,
+            "total_failed_upload": 0,
+            "failed_upload_files": [],
+            "uploaded_files": {"file1.txt": "abc123", "file2.txt": "def456"},
+        }
+
+        self.assertDictEqual(read_contents, expected_contents)
+
+    def test_incomplete_upload_displays_correct_debug_log(self):
+        upload_log = os.path.join(
+            TEST_DATA_DIR, "incomplete_run_upload.log.json"
+        )
+
+        with self.assertLogs("s3_upload", level="DEBUG") as log:
+            io.read_upload_state_log(upload_log)
+
+            expected_log_message = (
+                "total local files: 2 | total uploaded files: 1 | total"
+                " failed upload: 0 | total files to upload 1"
+            )
+
+            self.assertIn(expected_log_message, "".join(log.output))
+
+
 @patch("s3_upload.utils.io.path.exists")
 class TestWriteUploadStateToLog(unittest.TestCase):
     def tearDown(self):
