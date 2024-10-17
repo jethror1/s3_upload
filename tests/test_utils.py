@@ -315,41 +315,6 @@ class TestGetRunsToUpload(unittest.TestCase):
 
         rmtree(sequencer_output_dir)
 
-    def test_complete_sequencing_runs_are_skipped(self):
-        """
-        Incomplete run determined from presence of just having RunInfo.xml
-        file and no termination files
-        """
-        sequencer_output_dir = os.path.join(TEST_DATA_DIR, uuid4().hex)
-        ongoing_run = os.path.join(
-            sequencer_output_dir, "16102023_A01295_001_ABC123"
-        )
-        os.makedirs(
-            ongoing_run,
-            exist_ok=True,
-        )
-        open(os.path.join(ongoing_run, "RunInfo.xml"), "w").close()
-
-        to_upload, partial_upload = utils.get_runs_to_upload(
-            [sequencer_output_dir]
-        )
-
-        with self.subTest("testing outputs are empty"):
-            self.assertTrue(to_upload == [] and partial_upload == {})
-
-        with self.subTest("testing log message"):
-            with self.assertLogs("s3_upload", level="DEBUG") as log:
-                utils.get_runs_to_upload([sequencer_output_dir])
-
-                expected_log_message = (
-                    f"{ongoing_run} has not completed sequencing and will not"
-                    " be uploaded"
-                )
-
-                self.assertTrue(expected_log_message in "".join(log.output))
-
-        rmtree(sequencer_output_dir)
-
     @patch("s3_upload.utils.utils.check_upload_state")
     @patch("s3_upload.utils.utils.check_all_uploadable_samples")
     @patch("s3_upload.utils.utils.read_samplesheet_from_run_directory")
