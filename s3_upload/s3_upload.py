@@ -53,6 +53,15 @@ def parse_args() -> argparse.Namespace:
         required=True,
         help="config file for monitoring directories to upload",
     )
+    monitor_parser.add_argument(
+        "--dry_run",
+        default=False,
+        action="store_true",
+        help=(
+            "calls everything except the actual upload to check what runs"
+            " would be uploaded"
+        ),
+    )
 
     upload_parser = subparsers.add_parser(
         "upload",
@@ -133,7 +142,7 @@ def upload_single_run(args):
     )
 
 
-def monitor_directories_for_upload(config):
+def monitor_directories_for_upload(config, dry_run):
     """
     Monitor specified directories for complete sequencing runs to upload
 
@@ -141,6 +150,8 @@ def monitor_directories_for_upload(config):
     ----------
     config : dict
         contents of config file
+    dry_run : bool
+        calls everything except the actual upload for testing / debugging
     """
     log.info("Beginning monitoring directories for runs to upload")
 
@@ -205,6 +216,17 @@ def monitor_directories_for_upload(config):
         # preferentially upload partial runs first
         to_upload = partially_uploaded + to_upload
 
+    if dry_run:
+        for run in to_upload:
+            log.info(
+                "%s uploading to %s:%s",
+                run["run_dir"],
+                run["bucket"],
+                path.join(run["remote_path"], run["run_id"]),
+            )
+        log.info("--dry_run specified, exiting now without uploading")
+        sys.exit()
+
     for run_config in to_upload:
         # begin uploading of each sequencing run
         all_run_files = get_sequencing_file_list(run_config["run_dir"])
@@ -260,7 +282,7 @@ def main() -> None:
 
         set_file_handler(log, config.get("log_dir", "/var/log/s3_upload"))
 
-        monitor_directories_for_upload(config)
+        monitor_directories_for_upload(config=config, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":
