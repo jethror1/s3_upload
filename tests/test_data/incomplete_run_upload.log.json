@@ -1,0 +1,12 @@
+{
+    "run_id": "181024_A01295_001_ABC123",
+    "run path": "/genetics/181024_A01295_001_ABC123",
+    "completed": false,
+    "total_local_files": 2,
+    "total_uploaded_files": 1,
+    "total_failed_upload": 0,
+    "failed_upload_files": [],
+    "uploaded_files": {
+        "file1.txt": "abc123"
+    }
+}
