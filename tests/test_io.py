@@ -122,7 +122,7 @@ class TestReadUploadStateLog(unittest.TestCase):
 
         expected_contents = {
             "run_id": "181024_A01295_001_ABC123",
-            "run path": "/genetics/181024_A01295_001_ABC123",
+            "run_path": "/genetics/181024_A01295_001_ABC123",
             "completed": True,
             "total_local_files": 2,
             "total_uploaded_files": 2,
