@@ -1,4 +1,6 @@
 import os
+import re
+from requests.exceptions import RequestException
 import unittest
 from unittest.mock import patch
 
@@ -47,3 +49,55 @@ class TestFormatCompleteMessage(unittest.TestCase):
         )
 
         self.assertEqual(compiled_message, expected_message)
+
+
+@patch("s3_upload.utils.slack.requests.post")
+class TestPostMessage(unittest.TestCase):
+    def test_params_set_to_requests_post(self, mock_post):
+        slack.post_message(
+            url="https://hooks.slack.com/services/00001",
+            message="test message",
+        )
+
+        expected_call_args = {
+            "url": "https://hooks.slack.com/services/00001",
+            "data": '{"text": ":arrow_up: S3 Upload\\n\\ntest message"}',
+            "headers": {"content-type": "application/json"},
+            "timeout": 30,
+        }
+
+        self.assertDictEqual(dict(mock_post.call_args[1]), expected_call_args)
+
+    def test_error_logged_when_non_200_response_received(self, mock_post):
+        mock_post.return_value.status_code = 400
+        mock_post.return_value.text = "message failed to send :sadpanda:"
+
+        with self.assertLogs("s3_upload", level="DEBUG") as log:
+            slack.post_message(
+                url="https://hooks.slack.com/services/00001",
+                message="test message",
+            )
+
+            expected_log_error = (
+                "Error in post request to Slack (400): message failed to send"
+                " :sadpanda:"
+            )
+
+            self.assertIn(expected_log_error, "".join(log.output))
+
+    def test_error_logged_when_posting_raises_a_request_exception(
+        self, mock_post
+    ):
+        mock_post.side_effect = RequestException("failed to post")
+
+        with self.assertLogs("s3_upload", level="DEBUG") as log:
+            slack.post_message(
+                url="https://hooks.slack.com/services/00001",
+                message="test message",
+            )
+
+            expected_log_error = (
+                "Error in post request to Slack: failed to post"
+            )
+
+            self.assertIn(expected_log_error, "".join(log.output))
