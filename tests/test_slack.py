@@ -1,10 +1,7 @@
-import os
-import re
 from requests.exceptions import RequestException
 import unittest
 from unittest.mock import patch
 
-from tests import TEST_DATA_DIR
 from s3_upload.utils import slack
 
 
