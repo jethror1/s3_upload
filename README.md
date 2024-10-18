@@ -16,7 +16,7 @@ python3 s3_upload/s3_upload.py upload \
     --bucket myBucket
 ```
 
-Adding to a crontab:
+Adding to a crontab for monitoring:
 ```
 python3 s3_upload/s3_upload.py monitor --config /path/to/config.json
 ```
@@ -127,4 +127,4 @@ optional arguments:
 
 
 ## Notes
-TODO
+* When running in monitor mode, a file lock is acquired on `/var/lock/s3_upload.lock`. This ensures only a single upload process may run at once, preventing duplicate uploads of the same files.
