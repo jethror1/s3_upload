@@ -1,4 +1,7 @@
 # s3 upload
+
+![pytest](https://github.com/eastgenomics/s3_upload/actions/workflows/pytest.yml/badge.svg)
+
 Uploads Illumina sequencing runs into AWS S3 storage.
 
 There are 2 modes implemented, one to interactively upload a single sequencing run, and another to monitor on a schedule (i.e. via cron) one or more directories for newly completed sequencing runs and automatically upload into a given S3 bucket location.
@@ -35,7 +38,7 @@ Available inputs for `monitor`:
 
 ## Config
 
-The behaviour for monitoring of directories for sequencing runs to upload is controlled through the use of a JSON config file. An example may be found [here](https://github.com/eastgenomics/s3_upload/blob/URA-872_update_readme/example/example_config.json).
+The behaviour for monitoring of directories for sequencing runs to upload is controlled through the use of a JSON config file. An example may be found [here](https://github.com/eastgenomics/s3_upload/blob/main/example/example_config.json).
 
 The top level keys that may be defined include:
 * `max_cores` (int): maximum number of CPU cores to split uploading across (default is the maximum available)
