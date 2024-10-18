@@ -3,7 +3,12 @@ from os import cpu_count, path
 from pathlib import Path
 import sys
 
-from utils.io import read_config, write_upload_state_to_log
+from utils.io import (
+    acquire_lock,
+    read_config,
+    release_lock,
+    write_upload_state_to_log,
+)
 from utils.upload import (
     check_aws_access,
     check_buckets_exist,
@@ -277,12 +282,16 @@ def main() -> None:
     if args.mode == "upload":
         upload_single_run(args)
     else:
+        lock_fd = acquire_lock()
+
         config = read_config(config=args.config)
         verify_config(config=config)
 
         set_file_handler(log, config.get("log_dir", "/var/log/s3_upload"))
 
         monitor_directories_for_upload(config=config, dry_run=args.dry_run)
+
+        release_lock(lock_fd)
 
 
 if __name__ == "__main__":
