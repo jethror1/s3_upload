@@ -1,4 +1,7 @@
 # s3 upload
+
+![pytest](https://github.com/eastgenomics/s3_upload/actions/workflows/pytest.yml/badge.svg)
+
 Uploads Illumina sequencing runs into AWS S3 storage.
 
 There are 2 modes implemented, one to interactively upload a single sequencing run, and another to monitor on a schedule (i.e. via cron) one or more directories for newly completed sequencing runs and automatically upload into a given S3 bucket location.
@@ -13,7 +16,7 @@ python3 s3_upload/s3_upload.py upload \
     --bucket myBucket
 ```
 
-Adding to a crontab:
+Adding to a crontab for monitoring:
 ```
 python3 s3_upload/s3_upload.py monitor --config /path/to/config.json
 ```
@@ -35,7 +38,7 @@ Available inputs for `monitor`:
 
 ## Config
 
-The behaviour for monitoring of directories for sequencing runs to upload is controlled through the use of a JSON config file. An example may be found [here](https://github.com/eastgenomics/s3_upload/blob/URA-872_update_readme/example/example_config.json).
+The behaviour for monitoring of directories for sequencing runs to upload is controlled through the use of a JSON config file. An example may be found [here](https://github.com/eastgenomics/s3_upload/blob/main/example/example_config.json).
 
 The top level keys that may be defined include:
 * `max_cores` (int): maximum number of CPU cores to split uploading across (default is the maximum available)
@@ -95,8 +98,33 @@ The expected fields in this log file are:
 
 
 ## Docker
+A Dockerfile is provided for running the upload from within a Docker container. For convenience, the tool is bound to the command `s3_upload` in the container.
 
-TODO
+To build the Docker image: `docker build -t s3_upload:<tag> .`.
+
+To run the Docker image:
+```
+$ docker run --rm s3_upload:1.0.0 s3_upload upload --help
+usage: s3_upload.py upload [-h] [--local_path LOCAL_PATH] [--bucket BUCKET]
+                           [--remote_path REMOTE_PATH] [--cores CORES]
+                           [--threads THREADS]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --local_path LOCAL_PATH
+                        path to directory to upload
+  --bucket BUCKET       S3 bucket to upload to
+  --remote_path REMOTE_PATH
+                        remote path in bucket to upload sequencing dir to
+  --cores CORES         number of CPU cores to split total files to upload
+                        across, will default to using all available
+  --threads THREADS     number of threads to open per core to split uploading
+                        across (default: 8)
+```
+
+> [!IMPORTANT]
+> Both the `--local_path` for single run upload, and `monitored_directories` paths for monitoring, must be relative to where they are mounted into the container (i.e. if you mount the sequencer output to `/sequencer_output/` then your paths would be `--local_path /sequencer_output/run_A/` and `/sequencer_output/` for single upload and monitoring, respectively). In addition, for monitoring you must ensure to mount the log directory outside of the container to be persistent (i.e. using the default log location: `--volume /local/log/dir:/var/log/s3_upload`. If this is not done when the container shuts down, all runs will be identified as new on the next upload run and will attempt to be uploaded.)
+
 
 ## Notes
-TODO
+* When running in monitor mode, a file lock is acquired on `/var/lock/s3_upload.lock`. This ensures only a single upload process may run at once, preventing duplicate uploads of the same files.

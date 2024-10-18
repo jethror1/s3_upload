@@ -2,8 +2,14 @@ import argparse
 from os import cpu_count, path
 from pathlib import Path
 import sys
+from timeit import default_timer as timer
 
-from utils.io import read_config, write_upload_state_to_log
+from utils.io import (
+    acquire_lock,
+    read_config,
+    release_lock,
+    write_upload_state_to_log,
+)
 from utils.upload import (
     check_aws_access,
     check_buckets_exist,
@@ -227,8 +233,20 @@ def monitor_directories_for_upload(config, dry_run):
         log.info("--dry_run specified, exiting now without uploading")
         sys.exit()
 
-    for run_config in to_upload:
+    log.info("Beginning upload of %s runs", len(to_upload))
+
+    for idx, run_config in enumerate(to_upload, 1):
         # begin uploading of each sequencing run
+        log.info(
+            "Uploading run %s [%s/%s]",
+            run_config["run_id"],
+            idx,
+            len(to_upload),
+        )
+
+        # simple timer to log total upload time
+        start = timer()
+
         all_run_files = get_sequencing_file_list(run_config["run_dir"])
         files_to_upload = all_run_files.copy()
 
@@ -270,6 +288,15 @@ def monitor_directories_for_upload(config, dry_run):
             failed_files=failed_upload,
         )
 
+        end = timer()
+        total = end - start
+
+        log.info(
+            "Uploaded %s in %s",
+            run_config["run_id"],
+            f"{int(total // 60)}m {int(total % 60)}s",
+        )
+
 
 def main() -> None:
     args = parse_args()
@@ -277,12 +304,16 @@ def main() -> None:
     if args.mode == "upload":
         upload_single_run(args)
     else:
+        lock_fd = acquire_lock()
+
         config = read_config(config=args.config)
         verify_config(config=config)
 
         set_file_handler(log, config.get("log_dir", "/var/log/s3_upload"))
 
         monitor_directories_for_upload(config=config, dry_run=args.dry_run)
+
+        release_lock(lock_fd)
 
 
 if __name__ == "__main__":

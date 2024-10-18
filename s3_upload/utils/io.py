@@ -1,12 +1,89 @@
+"General IO related methods"
+
+from datetime import datetime
+from fcntl import flock, LOCK_EX, LOCK_NB, LOCK_UN
 import json
-from os import listdir, path
+import os
 from pathlib import Path
 import re
+import sys
 from typing import Union
 
 from .log import get_logger
 
 log = get_logger("s3_upload")
+
+
+def acquire_lock(lock_file="/var/lock/s3_upload.lock") -> int:
+    """
+    Tries to acquire an exclusive file lock on `/var/lock/s3_upload.lock`.
+
+    This is to ensure only one upload process may run at once in monitor
+    mode and prevent duplicate uploads where uploading takes longer than
+    the schedule on which to run.
+
+    If a process is already a lock on the file the function just cleanly
+    exits with a zero exit code and will retry on the next schedule.
+
+    Parameters
+    ----------
+    lock_file : str
+        absolute path to file to acquire lock on
+
+    Returns
+    -------
+    int
+        file id of the lock file
+    """
+    if os.path.exists(lock_file):
+        lock_fd = os.open(lock_file, flags=os.O_RDWR)
+    else:
+        # only set create and truncate modes if file does not already
+        # exist to preserve any contents
+        lock_fd = os.open(lock_file, flags=os.O_RDWR | os.O_CREAT | os.O_TRUNC)
+
+    try:
+        # LOCK_EX means that only one process can hold the lock
+        # LOCK_NB means that the fcntl.flock() is not blocking
+        # https://docs.python.org/3/library/fcntl.html#fcntl.flock
+        flock(lock_fd, LOCK_EX | LOCK_NB)
+        os.write(
+            lock_fd,
+            "file lock acquired from running upload at"
+            f" {datetime.now().strftime('%H:%M:%S')} from process"
+            f" {os.getpid()}".encode(),
+        )
+    except BlockingIOError:
+        print(
+            f"Could not acquire exclusive lock on {lock_file}, assuming"
+            " another upload process is currently running. Exiting now."
+        )
+        os.close(lock_fd)
+        sys.exit(0)
+
+    return lock_fd
+
+
+def release_lock(lock_fd) -> None:
+    """
+    Release the file lock on the given file descriptor. To be called on
+    completing the upload and closing.
+
+    Parameters
+    ----------
+    lock_fd : int
+        file id of the lock file
+    """
+    try:
+        # test if provided file descriptor is valid
+        os.readlink(f"/proc/self/fd/{lock_fd}")
+    except FileNotFoundError:
+        pass
+    else:
+        os.truncate(lock_fd, 0)
+
+        flock(lock_fd, LOCK_UN)
+        os.close(lock_fd)
 
 
 def read_config(config) -> dict:
@@ -50,7 +127,7 @@ def read_samplesheet_from_run_directory(run_dir) -> Union[list, None]:
     """
     log.info("Searching for samplesheet in run directory: %s", run_dir)
 
-    files = listdir(run_dir)
+    files = os.listdir(run_dir)
     files = [
         re.search(".*sample[-_ ]?sheet.*.csv$", x, re.IGNORECASE)
         for x in files
@@ -180,7 +257,7 @@ def write_upload_state_to_log(
         total_failed_upload,
     )
 
-    if path.exists(log_file):
+    if os.path.exists(log_file):
         # log file already exists => continuing previous failed upload
         log.debug("log file already exists to update at %s", log_file)
 
