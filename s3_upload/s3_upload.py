@@ -2,6 +2,7 @@ import argparse
 from os import cpu_count, path
 from pathlib import Path
 import sys
+from timeit import default_timer as timer
 
 from utils.io import (
     acquire_lock,
@@ -232,8 +233,20 @@ def monitor_directories_for_upload(config, dry_run):
         log.info("--dry_run specified, exiting now without uploading")
         sys.exit()
 
-    for run_config in to_upload:
+    log.info("Beginning upload of %s runs", len(to_upload))
+
+    for idx, run_config in enumerate(to_upload, 1):
         # begin uploading of each sequencing run
+        log.info(
+            "Uploading run %s [%s/%s]",
+            run_config["run_id"],
+            idx,
+            len(to_upload),
+        )
+
+        # simple timer to log total upload time
+        start = timer()
+
         all_run_files = get_sequencing_file_list(run_config["run_dir"])
         files_to_upload = all_run_files.copy()
 
@@ -273,6 +286,15 @@ def monitor_directories_for_upload(config, dry_run):
             local_files=all_run_files,
             uploaded_files=uploaded_files,
             failed_files=failed_upload,
+        )
+
+        end = timer()
+        total = end - start
+
+        log.info(
+            "Uploaded %s in %s",
+            run_config["run_id"],
+            f"{int(total // 60)}m {int(total % 60)}s",
         )
 
 
