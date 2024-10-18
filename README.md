@@ -98,8 +98,33 @@ The expected fields in this log file are:
 
 
 ## Docker
+A Dockerfile is provided for running the upload from within a Docker container. For convenience, the tool is bound to the command `s3_upload` in the container.
 
-TODO
+To build the Docker image: `docker build -t s3_upload:<tag> .`.
+
+To run the Docker image:
+```
+$ docker run --rm s3_upload:1.0.0 s3_upload upload --help
+usage: s3_upload.py upload [-h] [--local_path LOCAL_PATH] [--bucket BUCKET]
+                           [--remote_path REMOTE_PATH] [--cores CORES]
+                           [--threads THREADS]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --local_path LOCAL_PATH
+                        path to directory to upload
+  --bucket BUCKET       S3 bucket to upload to
+  --remote_path REMOTE_PATH
+                        remote path in bucket to upload sequencing dir to
+  --cores CORES         number of CPU cores to split total files to upload
+                        across, will default to using all available
+  --threads THREADS     number of threads to open per core to split uploading
+                        across (default: 8)
+```
+
+> [!IMPORTANT]
+> Both the `--local_path` for single run upload, and `monitored_directories` paths for monitoring, must be relative to where they are mounted into the container (i.e. if you mount the sequencer output to `/sequencer_output/` then your paths would be `--local_path /sequencer_output/run_A/` and `/sequencer_output/` for single upload and monitoring, respectively). In addition, for monitoring you must ensure to mount the log directory outside of the container to be persistent (i.e. using the default log location: `--volume /local/log/dir:/var/log/s3_upload`. If this is not done when the container shuts down, all runs will be identified as new on the next upload run and will attempt to be uploaded.)
+
 
 ## Notes
 TODO
