@@ -1,3 +1,4 @@
+import fcntl
 import json
 import os
 import unittest
@@ -7,7 +8,115 @@ from tests import TEST_DATA_DIR
 from s3_upload.utils import io
 
 
-@patch("s3_upload.utils.io.listdir")
+class TestAcquireLock(unittest.TestCase):
+    test_lock = os.path.join(TEST_DATA_DIR, "test.lock")
+
+    def setUp(self):
+        if os.path.exists(self.test_lock):
+            os.remove(self.test_lock)
+
+    def tearDown(self):
+        if os.path.exists(self.test_lock):
+            os.remove(self.test_lock)
+
+    @patch("s3_upload.utils.io.os.open", wraps=os.open)
+    def test_when_lock_file_does_not_exist_the_correct_flag_set(
+        self, mock_open
+    ):
+        """
+        When the lock file does not already exist we should open the lock
+        file with O_RDWR (2), O_CREAT (64) and O_TRUNC (512). Therefore
+        the flag set for open should be 578
+        """
+        io.acquire_lock(self.test_lock)
+
+        self.assertEqual(mock_open.call_args[1]["flags"], 578)
+
+    @patch("s3_upload.utils.io.os.open", wraps=os.open)
+    def test_when_lock_file_exists_the_correct_flag_set(self, mock_open):
+        """
+        When the lock file already exists we should open the lock file
+        with only O_RDWR (2) and therefore the flag should be 2, which
+        will prevent the file from being truncated and losing contents.
+        """
+        open(self.test_lock, "w").close()
+
+        io.acquire_lock(self.test_lock)
+
+        self.assertEqual(mock_open.call_args[1]["flags"], 2)
+
+    def test_file_lock_correctly_acquired_when_not_already_set(self):
+        """
+        If we can successfully acquire a file lock we should get an integer
+        file descriptor returned and the expected message written to the file
+        """
+        lock_fd = io.acquire_lock(self.test_lock)
+
+        with open(self.test_lock) as fh:
+            lock_contents = fh.read()
+
+        with self.subTest("file descriptor returned"):
+            self.assertEqual(type(lock_fd), int)
+
+        with self.subTest("lock contents correct"):
+            expected_contents = (
+                r"file lock acquired from running upload at"
+                r" [\d]{2}:[\d]{2}:[\d]{2} from process"
+                r" [\d]+"
+            )
+            self.assertRegex(lock_contents, expected_contents)
+
+    def test_correctly_exit_when_lock_already_present(self):
+        io.acquire_lock(self.test_lock)
+
+        with patch("s3_upload.utils.io.sys.exit") as mock_exit:
+            io.acquire_lock(self.test_lock)
+
+            self.assertTrue(mock_exit.called)
+
+
+class TestReleaseLock(unittest.TestCase):
+    test_lock = os.path.join(TEST_DATA_DIR, "test.lock")
+
+    def setUp(self):
+        if os.path.exists(self.test_lock):
+            os.remove(self.test_lock)
+
+    def tearDown(self):
+        if os.path.exists(self.test_lock):
+            os.remove(self.test_lock)
+
+    def test_file_lock_correctly_released(self):
+        lock_fd = io.acquire_lock(self.test_lock)
+
+        with patch(
+            "s3_upload.utils.io.flock", wraps=fcntl.flock
+        ) as mock_flock:
+            io.release_lock(lock_fd)
+
+            # should pass LOCK_UN (8) to flock call operation parameter
+            self.assertEqual(mock_flock.call_args[0][1], 8)
+
+    def test_no_error_raised_if_called_on_invalid_descriptor(self):
+        """
+        Test that if we try release a lock on a file descriptor that no
+        longer exists (i.e the file got somehow removed) that the function
+        does not raise an error
+        """
+        # find a file descriptor that does not already exist
+        fd = 0
+
+        while True:
+            try:
+                os.readlink(f"/proc/self/fd/{fd}")
+                fd += 1
+            except FileNotFoundError:
+                break
+
+        io.release_lock(fd)
+
+
+@patch("s3_upload.utils.io.os.listdir")
 class TestReadSamplesheetFromRunDirectory(unittest.TestCase):
     def test_no_samplesheet_returns_none(self, mock_dir):
         contents = io.read_samplesheet_from_run_directory(TEST_DATA_DIR)
@@ -149,7 +258,7 @@ class TestReadUploadStateLog(unittest.TestCase):
             self.assertIn(expected_log_message, "".join(log.output))
 
 
-@patch("s3_upload.utils.io.path.exists")
+@patch("s3_upload.utils.io.os.path.exists")
 class TestWriteUploadStateToLog(unittest.TestCase):
     def tearDown(self):
         os.remove(os.path.join(TEST_DATA_DIR, "test_run.upload.log.json"))

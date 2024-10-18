@@ -14,27 +14,33 @@ from .log import get_logger
 log = get_logger("s3_upload")
 
 
-def acquire_lock() -> int:
+def acquire_lock(lock_file="/var/lock/s3_upload.lock") -> int:
     """
     Tries to acquire an exclusive file lock on `/var/lock/s3_upload.lock`.
 
     This is to ensure only one upload process may run at once in monitor
     mode and prevent duplicate uploads where uploading takes longer than
-    the schedule on which to run
+    the schedule on which to run.
+
+    If a process is already a lock on the file the function just cleanly
+    exits with a zero exit code and will retry on the next schedule.
+
+    Parameters
+    ----------
+    lock_file : str
+        absolute path to file to acquire lock on
 
     Returns
     -------
     int
         file id of the lock file
     """
-    fd_mode = os.O_RDWR
-
-    if not os.path.exists("/var/lock/s3_upload.lock"):
+    if os.path.exists(lock_file):
+        lock_fd = os.open(lock_file, flags=os.O_RDWR)
+    else:
         # only set create and truncate modes if file does not already
         # exist to preserve any contents
-        fd_mode = fd_mode | os.O_CREAT | os.O_TRUNC
-
-    lock_fd = os.open("/var/lock/s3_upload.lock", fd_mode)
+        lock_fd = os.open(lock_file, flags=os.O_RDWR | os.O_CREAT | os.O_TRUNC)
 
     try:
         # LOCK_EX means that only one process can hold the lock
@@ -49,12 +55,11 @@ def acquire_lock() -> int:
         )
     except BlockingIOError:
         print(
-            "Could not acquire exclusive lock on /var/lock/s3_upload.lock,"
-            " assuming another upload process is currently running. Exiting"
-            " now."
+            f"Could not acquire exclusive lock on {lock_file}, assuming"
+            " another upload process is currently running. Exiting now."
         )
         os.close(lock_fd)
-        sys.exit()
+        sys.exit(0)
 
     return lock_fd
 
@@ -69,9 +74,16 @@ def release_lock(lock_fd) -> None:
     lock_fd : int
         file id of the lock file
     """
-    os.truncate(lock_fd, 0)
-    flock(lock_fd, LOCK_UN)
-    os.close(lock_fd)
+    try:
+        # test if provided file descriptor is valid
+        os.readlink(f"/proc/self/fd/{lock_fd}")
+    except FileNotFoundError:
+        pass
+    else:
+        os.truncate(lock_fd, 0)
+
+        flock(lock_fd, LOCK_UN)
+        os.close(lock_fd)
 
 
 def read_config(config) -> dict:
