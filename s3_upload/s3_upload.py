@@ -316,15 +316,27 @@ def monitor_directories_for_upload(config, dry_run):
         len(failed_upload),
     )
 
-    if config.get("slack_log_webhook") and (
-        successfully_uploaded or failed_upload
-    ):
+    # preferentially use respective log and alert channel webhooks if specified
+    log_url = config.get("slack_log_webhook") or config.get(
+        "slack_alert_webhook"
+    )
+    alert_url = config.get("slack_alert_webhook") or config.get(
+        "slack_log_webhook"
+    )
+
+    if successfully_uploaded and log_url:
+        log.debug(
+            "Sending success upload message to Slack channel %s", log_url
+        )
         message = slack.format_complete_message(
-            completed=successfully_uploaded, failed=failed_upload
+            completed=successfully_uploaded
         )
-        slack.post_message(
-            url=config.get("slack_log_webhook"), message=message
-        )
+        slack.post_message(url=log_url, message=message)
+
+    if failed_upload and alert_url:
+        log.debug("Sending failed upload alert to Slack channel %s", alert_url)
+        message = slack.format_complete_message(failed=failed_upload)
+        slack.post_message(url=alert_url, message=message)
 
 
 def main() -> None:

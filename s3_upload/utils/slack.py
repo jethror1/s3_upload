@@ -23,18 +23,21 @@ def format_complete_message(completed=None, failed=None) -> str:
     str
         formatted message for posting to Slack
     """
-    message = (
-        "Completed run uploads."
-        f" {len(completed) if completed else 0} successfully uploaded."
-        f" {len(failed) if failed else 0} failed uploading."
-    )
+    message = ""
 
     if completed:
-        message += "\n\nSuccessfully uploaded runs\n\t:black_square: "
+        message += ":white_check_mark: S3 Upload: Successfully uploaded "
+        message += f"{len(completed)} runs\n\t:black_square: "
         message += "\n\t:black_square: ".join(completed)
 
     if failed:
-        message += "\n\nFailed uploading runs\n\t:black_square: "
+        if message:
+            message += "\n\n"
+
+        message += (
+            ":x: S3 Upload: Failed uploading"
+            f" {len(failed)} runs\n\t:black_square: "
+        )
         message += "\n\t:black_square: ".join(failed)
 
     return message
@@ -56,7 +59,7 @@ def post_message(url, message) -> None:
     try:
         response = requests.post(
             url=url,
-            data=json.dumps({"text": f":arrow_up: S3 Upload\n\n{message}"}),
+            data=json.dumps({"text": message}),
             headers={"content-type": "application/json"},
             timeout=30,
         )
