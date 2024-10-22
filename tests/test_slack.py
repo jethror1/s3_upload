@@ -6,28 +6,26 @@ from s3_upload.utils import slack
 
 
 class TestFormatCompleteMessage(unittest.TestCase):
-    def test_only_completed_runs_message_correct(self):
+    def test_completed_upload_message_correct(self):
         compiled_message = slack.format_complete_message(
             completed=["run_1", "run_2"]
         )
 
         expected_message = (
-            "Completed run uploads. 2 successfully uploaded. 0"
-            " failed uploading.\n\nSuccessfully uploaded"
+            ":white_check_mark: S3 Upload: Successfully uploaded 2"
             " runs\n\t:black_square: run_1\n\t:black_square: run_2"
         )
 
         self.assertEqual(compiled_message, expected_message)
 
-    def test_only_failed_runs_message_correct(self):
+    def test_failed_upload_runs_message_correct(self):
         compiled_message = slack.format_complete_message(
-            failed=["run_1", "run_2"]
+            failed=["run_3", "run_4"]
         )
 
         expected_message = (
-            "Completed run uploads. 0 successfully uploaded. "
-            "2 failed uploading.\n\nFailed uploading runs"
-            "\n\t:black_square: run_1\n\t:black_square: run_2"
+            ":x: S3 Upload: Failed uploading 2 runs"
+            "\n\t:black_square: run_3\n\t:black_square: run_4"
         )
 
         self.assertEqual(compiled_message, expected_message)
@@ -38,10 +36,9 @@ class TestFormatCompleteMessage(unittest.TestCase):
         )
 
         expected_message = (
-            "Completed run uploads. 2 successfully uploaded. 2"
-            " failed uploading.\n\nSuccessfully uploaded"
-            " runs\n\t:black_square: run_1\n\t:black_square: run_2"
-            "\n\nFailed uploading runs"
+            ":white_check_mark: S3 Upload: Successfully uploaded 2"
+            " runs\n\t:black_square: run_1\n\t:black_square: run_2\n\n"
+            ":x: S3 Upload: Failed uploading 2 runs"
             "\n\t:black_square: run_3\n\t:black_square: run_4"
         )
 
@@ -58,7 +55,7 @@ class TestPostMessage(unittest.TestCase):
 
         expected_call_args = {
             "url": "https://hooks.slack.com/services/00001",
-            "data": '{"text": ":arrow_up: S3 Upload\\n\\ntest message"}',
+            "data": '{"text": "test message"}',
             "headers": {"content-type": "application/json"},
             "timeout": 30,
         }
