@@ -7,7 +7,7 @@ from .log import get_logger
 log = get_logger("s3_upload")
 
 
-def format_complete_message(completed=None, failed=None) -> str:
+def format_message(completed=None, failed=None) -> str:
     """
     Format Slack message to send to on completing upload
 

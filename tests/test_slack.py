@@ -7,9 +7,7 @@ from s3_upload.utils import slack
 
 class TestFormatCompleteMessage(unittest.TestCase):
     def test_completed_upload_message_correct(self):
-        compiled_message = slack.format_complete_message(
-            completed=["run_1", "run_2"]
-        )
+        compiled_message = slack.format_message(completed=["run_1", "run_2"])
 
         expected_message = (
             ":white_check_mark: S3 Upload: Successfully uploaded 2"
@@ -19,9 +17,7 @@ class TestFormatCompleteMessage(unittest.TestCase):
         self.assertEqual(compiled_message, expected_message)
 
     def test_failed_upload_runs_message_correct(self):
-        compiled_message = slack.format_complete_message(
-            failed=["run_3", "run_4"]
-        )
+        compiled_message = slack.format_message(failed=["run_3", "run_4"])
 
         expected_message = (
             ":x: S3 Upload: Failed uploading 2 runs"
@@ -31,7 +27,7 @@ class TestFormatCompleteMessage(unittest.TestCase):
         self.assertEqual(compiled_message, expected_message)
 
     def test_completed_and_failed_runs_in_same_message(self):
-        compiled_message = slack.format_complete_message(
+        compiled_message = slack.format_message(
             completed=["run_1", "run_2"], failed=["run_3", "run_4"]
         )
 
