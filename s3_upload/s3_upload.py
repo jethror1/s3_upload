@@ -236,8 +236,8 @@ def monitor_directories_for_upload(config, dry_run):
 
     log.info("Beginning upload of %s runs", len(to_upload))
 
-    successfully_uploaded = []
-    failed_upload = []
+    runs_successfully_uploaded = []
+    runs_failed_upload = []
 
     for idx, run_config in enumerate(to_upload, 1):
         # begin uploading of each sequencing run
@@ -292,12 +292,12 @@ def monitor_directories_for_upload(config, dry_run):
             failed_files=failed_upload,
         )
 
-        if log_data["uploaded"]:
+        if log_data["completed"]:
             upload_state = "Fully"
-            successfully_uploaded.append(log_data["run_id"])
+            runs_successfully_uploaded.append(log_data["run_id"])
         else:
             upload_state = "Partially"
-            failed_upload.append(log_data["run_id"])
+            runs_failed_upload.append(log_data["run_id"])
 
         end = timer()
         total = end - start
@@ -312,8 +312,8 @@ def monitor_directories_for_upload(config, dry_run):
     log.info(
         "Completed uploading all runs, %s successfully uploaded, %s failed"
         " upload",
-        len(successfully_uploaded),
-        len(failed_upload),
+        len(runs_successfully_uploaded),
+        len(runs_failed_upload),
     )
 
     # preferentially use respective log and alert channel webhooks if specified
@@ -330,16 +330,16 @@ def monitor_directories_for_upload(config, dry_run):
             " no Slack notifications to send"
         )
 
-    if successfully_uploaded and log_url:
+    if runs_successfully_uploaded and log_url:
         log.debug(
             "Sending success upload message to Slack channel %s", log_url
         )
-        message = slack.format_message(completed=successfully_uploaded)
+        message = slack.format_message(completed=runs_successfully_uploaded)
         slack.post_message(url=log_url, message=message)
 
-    if failed_upload and alert_url:
+    if runs_failed_upload and alert_url:
         log.debug("Sending failed upload alert to Slack channel %s", alert_url)
-        message = slack.format_message(failed=failed_upload)
+        message = slack.format_message(failed=runs_failed_upload)
         slack.post_message(url=alert_url, message=message)
 
 
