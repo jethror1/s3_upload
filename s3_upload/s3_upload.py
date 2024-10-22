@@ -324,6 +324,12 @@ def monitor_directories_for_upload(config, dry_run):
         "slack_log_webhook"
     )
 
+    if not log_url and not alert_url:
+        log.debug(
+            "Neither `slack_log_webhook` or `slack_alert_webhook` specified =>"
+            " no Slack notifications to send"
+        )
+
     if successfully_uploaded and log_url:
         log.debug(
             "Sending success upload message to Slack channel %s", log_url
