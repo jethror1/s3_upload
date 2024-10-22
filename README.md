@@ -55,7 +55,7 @@ Monitoring of specified directories for sequencing runs to upload are defined in
 * `remote_path` (str | required): parent path in which to upload sequencing run directories in the specified bucket
 * `sample_regex` (str | optional): regex pattern to match against all samples parsed from the samplesheet, all samples must match this pattern to upload the run. This is to be used for controlling upload of specific runs where samplenames inform the assay / test.
 
-Each dictionary inside of the list to monitor allows for setting separate upload locations for each of the monitored directories. For example, in the below example the output of both `sequencer_1` and `sequencer_2` would be uploaded to the root of `bucket_A`, and the output of `sequencer_3` would be uploaded into `sequencer_3_runs` in `bucket_B`. Any number of these dictionaries may be defined in the monitor list.
+Each dictionary inside of the list to monitor allows for setting separate upload locations for each of the monitored directories. For example, in the below codeblock the output of both `sequencer_1` and `sequencer_2` would be uploaded to the root of `bucket_A`, and the output of `sequencer_3` would be uploaded into `sequencer_3_runs` in `bucket_B`. Any number of these dictionaries may be defined in the monitor list.
 
 ```
     "monitor": [
