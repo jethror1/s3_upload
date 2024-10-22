@@ -41,18 +41,21 @@ Available inputs for `monitor`:
 The behaviour for monitoring of directories for sequencing runs to upload is controlled through the use of a JSON config file. An example may be found [here](https://github.com/eastgenomics/s3_upload/blob/main/example/example_config.json).
 
 The top level keys that may be defined include:
-* `max_cores` (int): maximum number of CPU cores to split uploading across (default is the maximum available)
-* `max_threads` (int): the maximum number of threads to use per CPU core
-* `log_level` (str): the level of logging to set, available options are defined [here](https://docs.python.org/3/library/logging.html#logging-levels)
-* `log_dir` (str): path to where to store logs (default is `/var/log/s3_upload`)
+* `max_cores` (int | optional): maximum number of CPU cores to split uploading across (default: maximum available)
+* `max_threads` (int | optional): the maximum number of threads to use per CPU core
+* `log_level` (str | optional): the level of logging to set, available options are defined [here](https://docs.python.org/3/library/logging.html#logging-levels)
+* `log_dir` (str | optional): path to where to store logs (default: `/var/log/s3_upload`)
+* `slack_log_webhook` (str | optional): Slack webhook URL to use for sending notifications on successful uploads, will try use `slack_alert_webhook` if not specified.
+* `slack_alert_webhook` (str | optional): Slack webhook URL to use for sending notifications on failed uploads, will try use `slack_log_webhook` if not specified.
+
 
 Monitoring of specified directories for sequencing runs to upload are defined in a list of dictionaries under the `monitor` key. The available keys per monitor dictionary include:
-* `monitored_directories` (list): list of absolute paths to directories to monitor for new sequencing runs (i.e the location the sequencer outputs to)
-* `bucket` (str): name of S3 bucket to upload to
-* `remote_path` (str): parent path in which to upload sequencing run directories in the specified bucket
+* `monitored_directories` (list | required): list of absolute paths to directories to monitor for new sequencing runs (i.e the location the sequencer outputs to)
+* `bucket` (str | required): name of S3 bucket to upload to
+* `remote_path` (str | required): parent path in which to upload sequencing run directories in the specified bucket
 * `sample_regex` (str | optional): regex pattern to match against all samples parsed from the samplesheet, all samples must match this pattern to upload the run. This is to be used for controlling upload of specific runs where samplenames inform the assay / test.
 
-Each dictionary inside of the list to monitor allows for setting separate upload locations for each of the monitored directories. For example, in the below example the output of both `sequencer_1` and `sequencer_2` would be uploaded to the root of `bucket_A`, and the output of `sequencer_3` would be uploaded into `sequencer_3_runs` in `bucket_B`. Any number of these dictionaries may be defined in the monitor list.
+Each dictionary inside of the list to monitor allows for setting separate upload locations for each of the monitored directories. For example, in the below codeblock the output of both `sequencer_1` and `sequencer_2` would be uploaded to the root of `bucket_A`, and the output of `sequencer_3` would be uploaded into `sequencer_3_runs` in `bucket_B`. Any number of these dictionaries may be defined in the monitor list.
 
 ```
     "monitor": [

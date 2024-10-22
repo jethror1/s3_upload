@@ -26,6 +26,7 @@ from utils.utils import (
     verify_config,
 )
 from utils.log import get_logger, set_file_handler
+import utils.slack as slack
 
 
 log = get_logger("s3_upload")
@@ -225,7 +226,7 @@ def monitor_directories_for_upload(config, dry_run):
     if dry_run:
         for run in to_upload:
             log.info(
-                "%s uploading to %s:%s",
+                "%s would be uploaded to %s:%s",
                 run["run_dir"],
                 run["bucket"],
                 path.join(run["remote_path"], run["run_id"]),
@@ -234,6 +235,9 @@ def monitor_directories_for_upload(config, dry_run):
         sys.exit()
 
     log.info("Beginning upload of %s runs", len(to_upload))
+
+    runs_successfully_uploaded = []
+    runs_failed_upload = []
 
     for idx, run_config in enumerate(to_upload, 1):
         # begin uploading of each sequencing run
@@ -279,7 +283,7 @@ def monitor_directories_for_upload(config, dry_run):
             log_dir, f"/uploads/{run_config['run_id']}.upload.log.json"
         )
 
-        write_upload_state_to_log(
+        log_data = write_upload_state_to_log(
             run_id=run_config["run_id"],
             run_path=run_config["run_dir"],
             log_file=run_log_file,
@@ -288,14 +292,55 @@ def monitor_directories_for_upload(config, dry_run):
             failed_files=failed_upload,
         )
 
+        if log_data["completed"]:
+            upload_state = "Fully"
+            runs_successfully_uploaded.append(log_data["run_id"])
+        else:
+            upload_state = "Partially"
+            runs_failed_upload.append(log_data["run_id"])
+
         end = timer()
         total = end - start
 
         log.info(
-            "Uploaded %s in %s",
+            "%s uploaded %s in %s",
+            upload_state,
             run_config["run_id"],
             f"{int(total // 60)}m {int(total % 60)}s",
         )
+
+    log.info(
+        "Completed uploading all runs, %s successfully uploaded, %s failed"
+        " upload",
+        len(runs_successfully_uploaded),
+        len(runs_failed_upload),
+    )
+
+    # preferentially use respective log and alert channel webhooks if specified
+    log_url = config.get("slack_log_webhook") or config.get(
+        "slack_alert_webhook"
+    )
+    alert_url = config.get("slack_alert_webhook") or config.get(
+        "slack_log_webhook"
+    )
+
+    if not log_url and not alert_url:
+        log.debug(
+            "Neither `slack_log_webhook` or `slack_alert_webhook` specified =>"
+            " no Slack notifications to send"
+        )
+
+    if runs_successfully_uploaded and log_url:
+        log.debug(
+            "Sending success upload message to Slack channel %s", log_url
+        )
+        message = slack.format_message(completed=runs_successfully_uploaded)
+        slack.post_message(url=log_url, message=message)
+
+    if runs_failed_upload and alert_url:
+        log.debug("Sending failed upload alert to Slack channel %s", alert_url)
+        message = slack.format_message(failed=runs_failed_upload)
+        slack.post_message(url=alert_url, message=message)
 
 
 def main() -> None:

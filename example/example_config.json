@@ -3,6 +3,8 @@
     "max_threads": 8,
     "log_level": "INFO",
     "log_dir": "/var/log/s3_upload",
+    "slack_log_webhook": "https://hooks.slack.com/services/T0AG2K1C6/xxx",
+    "slack_alert_webhook": "https://hooks.slack.com/services/T0AG2K1C6/yyy",
     "monitor": [
         {
             "monitored_directories": [
