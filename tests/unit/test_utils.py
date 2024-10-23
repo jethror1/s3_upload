@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tests import TEST_DATA_DIR
+from unit import TEST_DATA_DIR
 from s3_upload.utils import io, utils
 
 

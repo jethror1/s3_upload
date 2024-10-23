@@ -14,7 +14,7 @@ import pytest
 
 
 from s3_upload.utils import upload
-from tests import TEST_DATA_DIR
+from unit import TEST_DATA_DIR
 
 
 @patch("s3_upload.utils.upload.boto3.Session.resource")

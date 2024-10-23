@@ -4,7 +4,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from tests import TEST_DATA_DIR
+from unit import TEST_DATA_DIR
 from s3_upload.utils import io
 
 
