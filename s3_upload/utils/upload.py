@@ -42,7 +42,7 @@ def check_aws_access():
         raise RuntimeError(f"Error in connecting to AWS: {err}") from err
 
 
-def check_buckets_exist(*buckets) -> List[dict]:
+def check_buckets_exist(buckets) -> List[dict]:
     """
     Check that the provided bucket(s) exist and are accessible
 
