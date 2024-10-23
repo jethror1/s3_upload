@@ -143,3 +143,8 @@ pip install pre-commit detect-secrets
 
 The config for the pre-commit hook is stored in [.pre-commit-config.yaml](https://github.com/eastgenomics/s3_upload/blob/main/.secrets.baseline) and the baseline for the repository to compare against when scanning with detect-secrets is stored in [.pre-commit-config.yaml](https://github.com/eastgenomics/s3_upload/blob/main/.secrets.baseline)
 
+**The pre-commit hook must then be installed to run on each commit**:
+```
+$ pre-commit install
+pre-commit installed at .git/hooks/pre-commit
+```
