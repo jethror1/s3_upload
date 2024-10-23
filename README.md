@@ -133,7 +133,7 @@ optional arguments:
 * When running in monitor mode, a file lock is acquired on `s3_upload.lock`, which by default will be written into the log directory. This ensures only a single upload process may run at once, preventing duplicate uploads of the same files.
 
 
-## Pre-commit hooks
+## Pre-commit Hooks
 Pre-commit hooks are setup to enable secret scanning using [Yelp/detect-secrets](https://github.com/Yelp/detect-secrets?tab=readme-ov-file), this will prevent accidentally committing anything that may be sensitive (i.e. AWS credentials).
 
 This requires first installing [pre-commit](https://pre-commit.com/) and [detect-secrets](https://github.com/Yelp/detect-secrets?tab=readme-ov-file#installation), both may be installed with pip:
