@@ -144,7 +144,9 @@ def read_samplesheet_from_run_directory(run_dir) -> Union[list, None]:
 
     # read all files in, split lines to lists and ensure trailing new line
     # dropped to not result in empty string in list
-    all_files_contents = [Path(x).read_text() for x in files]
+    all_files_contents = [
+        Path(os.path.join(run_dir, x)).read_text() for x in files
+    ]
 
     all_files_contents = [
         re.sub(r"\n$", "", x).split("\n") for x in all_files_contents
