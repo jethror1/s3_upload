@@ -1,4 +1,4 @@
-# s3 upload
+# AWS S3 upload
 
 ![pytest](https://github.com/eastgenomics/s3_upload/actions/workflows/pytest.yml/badge.svg)
 
