@@ -130,4 +130,4 @@ optional arguments:
 
 
 ## Notes
-* When running in monitor mode, a file lock is acquired on `/var/lock/s3_upload.lock`. This ensures only a single upload process may run at once, preventing duplicate uploads of the same files.
+* When running in monitor mode, a file lock is acquired on `s3_upload.lock`, which by default will be written into the log directory. This ensures only a single upload process may run at once, preventing duplicate uploads of the same files.

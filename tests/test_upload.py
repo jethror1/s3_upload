@@ -70,7 +70,7 @@ class TestCheckBucketsExist(unittest.TestCase):
             valid_bucket_metadata
         )
 
-        bucket_details = upload.check_buckets_exist("jethro-s3-test-v2")
+        bucket_details = upload.check_buckets_exist(["jethro-s3-test-v2"])
 
         self.assertEqual(bucket_details, [valid_bucket_metadata])
 
@@ -92,7 +92,9 @@ class TestCheckBucketsExist(unittest.TestCase):
         )
 
         with pytest.raises(RuntimeError, match=re.escape(expected_error)):
-            upload.check_buckets_exist("invalid_bucket_1", "invalid_bucket_2")
+            upload.check_buckets_exist(
+                ["invalid_bucket_1", "invalid_bucket_2"]
+            )
 
     def test_client_error_raised_when_bucket_does_not_exist(self, mock_client):
         mock_client.side_effect = s3_exceptions.ClientError(
@@ -102,7 +104,7 @@ class TestCheckBucketsExist(unittest.TestCase):
         expected_error = "1 bucket(s) not accessible / do not exist: s3-test"
 
         with pytest.raises(RuntimeError, match=re.escape(expected_error)):
-            upload.check_buckets_exist("s3-test")
+            upload.check_buckets_exist(["s3-test"])
 
 
 @patch("s3_upload.utils.upload.boto3.session.Session.client")

@@ -14,9 +14,9 @@ from .log import get_logger
 log = get_logger("s3_upload")
 
 
-def acquire_lock(lock_file="/var/lock/s3_upload.lock") -> int:
+def acquire_lock(lock_file="/var/log/s3_upload/s3_upload.lock") -> int:
     """
-    Tries to acquire an exclusive file lock on `/var/lock/s3_upload.lock`.
+    Tries to acquire an exclusive file lock on `s3_upload.lock` in log directory.
 
     This is to ensure only one upload process may run at once in monitor
     mode and prevent duplicate uploads where uploading takes longer than
@@ -144,7 +144,9 @@ def read_samplesheet_from_run_directory(run_dir) -> Union[list, None]:
 
     # read all files in, split lines to lists and ensure trailing new line
     # dropped to not result in empty string in list
-    all_files_contents = [Path(x).read_text() for x in files]
+    all_files_contents = [
+        Path(os.path.join(run_dir, x)).read_text() for x in files
+    ]
 
     all_files_contents = [
         re.sub(r"\n$", "", x).split("\n") for x in all_files_contents
