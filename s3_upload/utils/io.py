@@ -14,9 +14,9 @@ from .log import get_logger
 log = get_logger("s3_upload")
 
 
-def acquire_lock(lock_file="/var/lock/s3_upload.lock") -> int:
+def acquire_lock(lock_file="/var/log/s3_upload/s3_upload.lock") -> int:
     """
-    Tries to acquire an exclusive file lock on `/var/lock/s3_upload.lock`.
+    Tries to acquire an exclusive file lock on `s3_upload.lock` in log directory.
 
     This is to ensure only one upload process may run at once in monitor
     mode and prevent duplicate uploads where uploading takes longer than
