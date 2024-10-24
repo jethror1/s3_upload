@@ -99,7 +99,7 @@ def check_upload_state(
     # get the list of already uploaded files from the stored mapping
     uploaded_files = list(log_contents["uploaded_files"].keys())
 
-    if log_contents["uploaded"]:
+    if log_contents["completed"]:
         return "uploaded", uploaded_files
     else:
         return "partial", uploaded_files
