@@ -156,4 +156,4 @@ cython_debug/
 
 # s3_upload specific exclusions
 tmp/*
-*.json
+./*.json
