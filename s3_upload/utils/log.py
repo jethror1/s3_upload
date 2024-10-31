@@ -43,6 +43,8 @@ def set_file_handler(logger, log_dir) -> None:
 
     logger.addHandler(file_handler)
 
+    return logger
+
 
 def check_write_permission_to_log_dir(log_dir) -> None:
     """
