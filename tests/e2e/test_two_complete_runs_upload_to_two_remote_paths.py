@@ -1,3 +1,13 @@
+"""
+End to end tests for uploading 2 completed sequencing runs that are
+in separate monitored directories and being uploaded into separate
+remote paths in the same specified bucket.
+
+We will create locally `sequencer_a/run_1` and `sequencer_b/run_2`
+which we then expect to upload to `s3_upload_e2e_test/{now}/
+sequencer_a/run_1` and ``s3_upload_e2e_test/{now}/sequencer_b/run_2`
+respectively.
+"""
 from argparse import Namespace
 from copy import deepcopy
 from datetime import datetime
@@ -17,17 +27,6 @@ from s3_upload.s3_upload import main as s3_upload_main
 
 
 class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
-    """
-    End to end tests for uploading 2 completed sequencing runs that are
-    in separate monitored directories and being uploaded into separate
-    remote paths in the same specified bucket.
-
-    We will create locally `sequencer_a/run_1` and `sequencer_b/run_2`
-    which we then expect to upload to `s3_upload_e2e_test/{now}/
-    sequencer_a/run_1` and ``s3_upload_e2e_test/{now}/sequencer_b/run_2`
-    respectively.
-    """
-
     @classmethod
     def setUpClass(cls):
         # create test sequencing runs in set monitored directories
