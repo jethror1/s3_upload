@@ -3,9 +3,11 @@ End to end tests for running the upload in monitor mode.
 
 The below tests will fully simulate the upload process of a sequencing
 run by setting up test run structure, calling the main entry point and
-testing the upload behaviour. This requires that the script is able to
-authenticate with AWS as files are uploaded, and that a bucket is
-provided as the environment variable `E2E_TEST_S3_BUCKET`.
+testing the upload behaviour.
+
+This requires that the script is able to authenticate with AWS as files
+are uploaded, and that a bucket is provided as the environment variable
+`E2E_TEST_S3_BUCKET`.
 """
 
 from argparse import Namespace
@@ -302,21 +304,30 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
 
         # define full unique path to upload test runs to
         now = datetime.now().strftime("%y%m%d_%H%M%S")
-        cls.remote_path = f"s3_upload_e2e_test/{now}/sequencer_a"
+        cls.run_1_remote_path = f"s3_upload_e2e_test/{now}/sequencer_a"
+        cls.run_2_remote_path = f"s3_upload_e2e_test/{now}/sequencer_b"
 
-        # add in the sequencer to monitor with test run
+        # add in the sequencer directories to monitor with test run
         config_file = os.path.join(TEST_DATA_DIR, "test_config.json")
         config = deepcopy(BASE_CONFIG)
         config["log_dir"] = os.path.join(TEST_DATA_DIR, "logs")
-        config["monitor"].append(
-            {
-                "monitored_directories": [
-                    os.path.join(TEST_DATA_DIR, "sequencer_a"),
-                    os.path.join(TEST_DATA_DIR, "sequencer_b"),
-                ],
-                "bucket": S3_BUCKET,
-                "remote_path": cls.remote_path,
-            }
+        config["monitor"].extend(
+            [
+                {
+                    "monitored_directories": [
+                        os.path.join(TEST_DATA_DIR, "sequencer_a"),
+                    ],
+                    "bucket": S3_BUCKET,
+                    "remote_path": cls.run_1_remote_path,
+                },
+                {
+                    "monitored_directories": [
+                        os.path.join(TEST_DATA_DIR, "sequencer_b"),
+                    ],
+                    "bucket": S3_BUCKET,
+                    "remote_path": cls.run_2_remote_path,
+                },
+            ]
         )
 
         with open(config_file, "w") as fh:
@@ -344,10 +355,14 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         shutil.rmtree(cls.run_1)
+        shutil.rmtree(cls.run_2)
 
-        os.remove(
-            os.path.join(TEST_DATA_DIR, "logs/uploads/run_1.upload.log.json")
-        )
+        # os.remove(
+        #     os.path.join(TEST_DATA_DIR, "logs/uploads/run_1.upload.log.json")
+        # )
+        # os.remove(
+        #     os.path.join(TEST_DATA_DIR, "logs/uploads/run_2.upload.log.json")
+        # )
 
         os.remove(os.path.join(TEST_DATA_DIR, "test_config.json"))
 
@@ -357,7 +372,9 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
 
         # clean up the remote files we just uploaded
         bucket = boto3.resource("s3").Bucket(S3_BUCKET)
-        objects = bucket.objects.filter(Prefix=cls.remote_path)
+        objects = bucket.objects.filter(
+            Prefix=cls.run_1_remote_path.replace("/sequencer_a", "")
+        )
         bucket.delete_objects(
             Delete={"Objects": [{"Key": obj.key} for obj in objects]}
         )
@@ -365,3 +382,62 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
         cls.mock_args.stop()
         cls.mock_flock.stop()
         cls.mock_slack.stop()
+
+    def test_remote_file_uploaded_correctly(self):
+        """
+        Test that both runs upload correctly into the correct locations
+        """
+        pass
+
+    def test_upload_log_files_for_fully_uploaded_runs_correct(self):
+        """
+        Test the upload logs for both runs are as expected
+        """
+        pass
+
+    def test_slack_post_message_after_uploading_as_expected(self):
+        with self.subTest("only one Slack message sent"):
+            self.assertEqual(self.mock_slack.call_count, 1)
+
+        with self.subTest("correct webhook used"):
+            self.assertEqual(
+                self.mock_slack.call_args[1]["url"],
+                BASE_CONFIG["slack_log_webhook"],
+            )
+
+        with self.subTest("message formatted as expected"):
+            expected_message = (
+                ":white_check_mark: S3 Upload: Successfully uploaded 2"
+                " runs\n\t:black_square: run_1\n\t:black_square: run_2"
+            )
+
+            self.assertEqual(
+                self.mock_slack.call_args[1]["message"], expected_message
+            )
+
+    @patch("s3_upload.s3_upload.sys.exit")
+    def test_uploaded_run_not_picked_up_to_upload_again(self, mock_exit):
+        """
+        Test that when monitor runs again that the uploaded run does not
+        get triggered to upload again
+        """
+        with self.assertLogs("s3_upload") as log:
+            s3_upload_main()
+
+            self.assertIn(
+                "No sequencing runs requiring upload found. Exiting now.",
+                "".join(log.output),
+            )
+
+    @patch("s3_upload.s3_upload.sys.exit")
+    def test_when_nothing_to_upload_that_exit_code_is_zero(self, mock_exit):
+        """
+        Test that when there is nothing to upload that we cleanly exit
+        """
+        s3_upload_main()
+
+        with self.subTest("exit called"):
+            self.assertEqual(mock_exit.call_count, 1)
+
+        with self.subTest("exit code"):
+            self.assertEqual(mock_exit.call_args[0][0], 0)
