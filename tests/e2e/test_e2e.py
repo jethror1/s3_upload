@@ -211,10 +211,7 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
         with self.subTest("exit code"):
             self.assertEqual(mock_exit.call_args[0][0], 0)
 
-    def test_slack_post_message_as_expected(self):
-        """
-        Test that the Slack message posted on completing upload is as expected
-        """
+    def test_slack_post_message_after_uploading_as_expected(self):
         with self.subTest("only one Slack message sent"):
             self.assertEqual(self.mock_slack.call_count, 1)
 
