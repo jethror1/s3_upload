@@ -175,7 +175,7 @@ def monitor_directories_for_upload(config, dry_run):
     # find all the runs to upload in the specified monitored directories
     # and build a dict per run with config of where to upload
     for monitor_dir_config in config["monitor"]:
-        completed_runs, partially_uploaded = get_runs_to_upload(
+        completed_runs, incomplete_runs = get_runs_to_upload(
             monitor_dir_config.get("monitored_directories"),
             log_dir=log_dir,
             sample_pattern=monitor_dir_config.get("sample_regex"),
@@ -192,7 +192,7 @@ def monitor_directories_for_upload(config, dry_run):
                 }
             )
 
-        for partial_run, uploaded_files in partially_uploaded.items():
+        for partial_run, uploaded_files in incomplete_runs.items():
             partially_uploaded.append(
                 {
                     "run_dir": partial_run,
@@ -206,7 +206,7 @@ def monitor_directories_for_upload(config, dry_run):
 
     if not to_upload and not partially_uploaded:
         log.info("No sequencing runs requiring upload found. Exiting now.")
-        sys.exit()
+        sys.exit(0)
 
     log.info(
         "Found %s new sequencing runs to upload: %s",
