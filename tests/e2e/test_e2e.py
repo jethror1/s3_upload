@@ -61,7 +61,7 @@ def create_files(run_dir, *files):
         parent_dir = Path(full_path).parent
 
         os.makedirs(parent_dir, exist_ok=True)
-        open(full_path, "a").close()
+        open(full_path, encoding="utf-8", mode="a").close()
 
 
 class TestE2ESingleSuccessfulRun(unittest.TestCase):
