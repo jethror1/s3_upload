@@ -13,6 +13,17 @@ import boto3
 from e2e import TEST_DATA_DIR
 from s3_upload.s3_upload import main as s3_upload_main
 
+print(os.environ)
+S3_BUCKET = os.environ.get("E2E_TEST_S3_BUCKET")
+
+print(S3_BUCKET)
+print(os.environ.get("SHELL"))
+
+if not S3_BUCKET:
+    raise AttributeError(
+        "Required E2E_TEST_S3_Bucket not set as environment variable"
+    )
+
 
 BASE_CONFIG = {
     "max_cores": 4,
@@ -21,16 +32,11 @@ BASE_CONFIG = {
     "log_dir": "",
     "slack_log_webhook": "",
     "slack_alert_webhook": "",
-    "monitor": [
-        {
-            "monitored_directories": [],
-            "bucket": "jethro-s3-test-v2",
-            "remote_path": f"s3_upload_e2e_test/{datetime.now().strftime('%y%m%d_%H%M%S')}/sequencer_a",
-        }
-    ],
+    "monitor": [],
 }
 
 
+@patch()
 class TestE2ESingleSuccessfulRun(unittest.TestCase):
 
     @classmethod
@@ -47,27 +53,37 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
             os.path.join(cls.run_1, "run_1_samplesheet.csv"),
         )
 
+        # define full unique path to upload test runs to
+        now = datetime.now().strftime("%y%m%d_%H%M%S")
+        cls.remote_path = f"s3_upload_e2e_test/{now}/sequencer_a"
+
         # add in the sequencer to monitor with test run
+        config_file = os.path.join(TEST_DATA_DIR, "test_config.json")
         config = deepcopy(BASE_CONFIG)
         config["log_dir"] = os.path.join(TEST_DATA_DIR, "logs")
-        config["monitor"][0]["monitored_directories"] = [
-            os.path.join(TEST_DATA_DIR, "sequencer_a")
-        ]
+        config["monitor"].append(
+            {
+                "monitored_directories": [
+                    os.path.join(TEST_DATA_DIR, "sequencer_a")
+                ],
+                "bucket": S3_BUCKET,
+                "remote_path": cls.remote_path,
+            }
+        )
 
-        cls.bucket = config["monitor"][0]["bucket"]
-        cls.remote_path = config["monitor"][0]["remote_path"]
-
-        with open(os.path.join(TEST_DATA_DIR, "config1.json"), "w") as fh:
+        with open(config_file, "w") as fh:
             json.dump(config, fh)
 
         # mock command line args that would be set pointing to the config
         cls.mock_args = patch("s3_upload.s3_upload.parse_args").start()
         cls.mock_args.return_value = Namespace(
-            config=os.path.join(TEST_DATA_DIR, "config1.json"),
+            config=config_file,
             dry_run=False,
             mode="monitor",
         )
 
+        # mock the file lock that stops concurrent uploads as this breaks
+        # when running unittest
         cls.mock_flock = patch("s3_upload.s3_upload.acquire_lock").start()
 
         # call the main entry point to run the upload
@@ -81,16 +97,21 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
             os.path.join(TEST_DATA_DIR, "logs/uploads/run_1.upload.log.json")
         )
 
+        os.remove(os.path.join(TEST_DATA_DIR, "test_config.json"))
+
         # delete the logger log files
         for log_file in glob(os.path.join(TEST_DATA_DIR, "logs", "*log*")):
             os.remove(log_file)
 
         # clean up the remote files we just uploaded
-        bucket = boto3.resource("s3").Bucket(cls.bucket)
+        bucket = boto3.resource("s3").Bucket(S3_BUCKET)
         objects = bucket.objects.filter(Prefix=cls.remote_path)
         bucket.delete_objects(
             Delete={"Objects": [{"Key": obj.key} for obj in objects]}
         )
+
+        cls.mock_args.stop()
+        cls.mock_flock.stop()
 
     def test_single_complete_run_uploads_as_expected(self):
         """
@@ -116,7 +137,7 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
             [os.path.join(self.remote_path, "run_1", f) for f in local_files]
         )
 
-        bucket = boto3.resource("s3").Bucket(self.bucket)
+        bucket = boto3.resource("s3").Bucket(S3_BUCKET)
         uploaded_objects = bucket.objects.filter(Prefix=self.remote_path)
         uploaded_files = sorted([x.key for x in uploaded_objects])
 
