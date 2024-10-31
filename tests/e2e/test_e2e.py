@@ -13,6 +13,7 @@ from copy import deepcopy
 from datetime import datetime
 from glob import glob
 import json
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 import os
@@ -42,24 +43,43 @@ BASE_CONFIG = {
 }
 
 
+def create_files(run_dir, *files):
+    """
+    Create the given files and intermediate paths provided from the
+    given test run directory
+
+    Parameters
+    ----------
+    run_dir : str
+        path to test run directory
+
+    files : list
+        files and relative paths to create
+    """
+    for file_path in files:
+        full_path = os.path.join(run_dir, file_path)
+        parent_dir = Path(full_path).parent
+
+        os.makedirs(parent_dir, exist_ok=True)
+        open(full_path, "a").close()
+
+
 class TestE2ESingleSuccessfulRun(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         # create test sequencing run in set monitored directory
         cls.run_1 = os.path.join(TEST_DATA_DIR, "sequencer_a", "run_1")
-        os.makedirs(cls.run_1, exist_ok=True)
-        os.makedirs(os.path.join(cls.run_1, "InterOp"), exist_ok=True)
-        os.makedirs(os.path.join(cls.run_1, "Config"), exist_ok=True)
 
-        # create as a complete run
-        open(os.path.join(cls.run_1, "RunInfo.xml"), "w").close()
-        open(os.path.join(cls.run_1, "CopyComplete.txt"), "w").close()
-        open(os.path.join(cls.run_1, "Config/Options.cfg"), "w").close()
-        open(
-            os.path.join(cls.run_1, "InterOp/EventMetricsOut.bin"),
-            "w",
-        ).close()
+        # create as a complete run with some example files
+        create_files(
+            cls.run_1,
+            "RunInfo.xml",
+            "CopyComplete.txt",
+            "Config/Options.cfg",
+            "InterOp/EventMetricsOut.bin",
+        )
+
         shutil.copy(
             os.path.join(TEST_DATA_DIR, "example_samplesheet.csv"),
             os.path.join(cls.run_1, "run_1_samplesheet.csv"),
