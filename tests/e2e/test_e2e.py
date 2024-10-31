@@ -30,13 +30,12 @@ BASE_CONFIG = {
     "max_threads": 8,
     "log_level": "DEBUG",
     "log_dir": "",
-    "slack_log_webhook": "",
-    "slack_alert_webhook": "",
+    "slack_log_webhook": "https://slack_webhook_log_channel",
+    "slack_alert_webhook": "https://slack_webhook_log_channel",
     "monitor": [],
 }
 
 
-@patch()
 class TestE2ESingleSuccessfulRun(unittest.TestCase):
 
     @classmethod
@@ -86,6 +85,10 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
         # when running unittest
         cls.mock_flock = patch("s3_upload.s3_upload.acquire_lock").start()
 
+        cls.mock_slack = patch(
+            "s3_upload.s3_upload.slack.post_message"
+        ).start()
+
         # call the main entry point to run the upload
         s3_upload_main()
 
@@ -112,15 +115,7 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
 
         cls.mock_args.stop()
         cls.mock_flock.stop()
-
-    def test_single_complete_run_uploads_as_expected(self):
-        """
-        Test for our completed test sequencing run that when
-        s3_upload is called pointing to that directory that it is
-        correctly uploaded
-        """
-        # s3_upload_main()
-        pass
+        cls.mock_slack.stop()
 
     def test_remote_files_upload_correctly(self):
         """
@@ -209,3 +204,26 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
 
         with self.subTest("exit code"):
             self.assertEqual(mock_exit.call_args[0][0], 0)
+
+    def test_slack_post_message_as_expected(self):
+        """
+        Test that the Slack message posted on completing upload is as expected
+        """
+        with self.subTest("only one Slack message sent"):
+            self.assertEqual(self.mock_slack.call_count, 1)
+
+        with self.subTest("correct webhook used"):
+            self.assertEqual(
+                self.mock_slack.call_args[1]["url"],
+                BASE_CONFIG["slack_log_webhook"],
+            )
+
+        with self.subTest("message formatted as expected"):
+            expected_message = (
+                ":white_check_mark: S3 Upload: Successfully uploaded 1"
+                " runs\n\t:black_square: run_1"
+            )
+
+            self.assertEqual(
+                self.mock_slack.call_args[1]["message"], expected_message
+            )
