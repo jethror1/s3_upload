@@ -49,10 +49,17 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
         # create test sequencing run in set monitored directory
         cls.run_1 = os.path.join(TEST_DATA_DIR, "sequencer_a", "run_1")
         os.makedirs(cls.run_1, exist_ok=True)
+        os.makedirs(os.path.join(cls.run_1, "InterOp"), exist_ok=True)
+        os.makedirs(os.path.join(cls.run_1, "Config"), exist_ok=True)
 
         # create as a complete run
         open(os.path.join(cls.run_1, "RunInfo.xml"), "w").close()
         open(os.path.join(cls.run_1, "CopyComplete.txt"), "w").close()
+        open(os.path.join(cls.run_1, "Config/Options.cfg"), "w").close()
+        open(
+            os.path.join(cls.run_1, "InterOp/EventMetricsOut.bin"),
+            "w",
+        ).close()
         shutil.copy(
             os.path.join(TEST_DATA_DIR, "example_samplesheet.csv"),
             os.path.join(cls.run_1, "run_1_samplesheet.csv"),
@@ -133,6 +140,8 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
             "RunInfo.xml",
             "CopyComplete.txt",
             "run_1_samplesheet.csv",
+            "Config/Options.cfg",
+            "InterOp/EventMetricsOut.bin",
         ]
         expected_remote_files = sorted(
             [os.path.join(self.remote_path, "run_1", f) for f in local_files]
@@ -156,8 +165,8 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
             "run_id": "run_1",
             "run path": "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1",
             "completed": True,
-            "total_local_files": 3,
-            "total_uploaded_files": 3,
+            "total_local_files": 5,
+            "total_uploaded_files": 5,
             "total_failed_upload": 0,
             "failed_upload_files": [],
         }
@@ -165,6 +174,8 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
             "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1/CopyComplete.txt",
             "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1/RunInfo.xml",
             "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1/run_1_samplesheet.csv",
+            "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1/Config/Options.cfg",
+            "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1/InterOp/EventMetricsOut.bin",
         ]
 
         upload_log = os.path.join(
@@ -182,7 +193,7 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
         with self.subTest("correct local files uploaded in log"):
             uploaded_files = sorted(log_contents["uploaded_files"].keys())
 
-            self.assertEqual(expected_uploaded_files, uploaded_files)
+            self.assertEqual(sorted(expected_uploaded_files), uploaded_files)
 
     @patch("s3_upload.s3_upload.sys.exit")
     def test_uploaded_run_not_picked_up_to_upload_again(self, mock_exit):
