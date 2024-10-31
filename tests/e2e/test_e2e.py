@@ -1,3 +1,13 @@
+"""
+End to end tests for running the upload in monitor mode.
+
+The below tests will fully simulate the upload process of a sequencing
+run by setting up test run structure, calling the main entry point and
+testing the upload behaviour. This requires that the script is able to
+authenticate with AWS as files are uploaded, and that a bucket is
+provided as the environment variable `E2E_TEST_S3_BUCKET`.
+"""
+
 from argparse import Namespace
 from copy import deepcopy
 from datetime import datetime
@@ -13,17 +23,13 @@ import boto3
 from e2e import TEST_DATA_DIR
 from s3_upload.s3_upload import main as s3_upload_main
 
-print(os.environ)
-S3_BUCKET = os.environ.get("E2E_TEST_S3_BUCKET")
 
-print(S3_BUCKET)
-print(os.environ.get("SHELL"))
+S3_BUCKET = os.environ.get("E2E_TEST_S3_BUCKET")
 
 if not S3_BUCKET:
     raise AttributeError(
         "Required E2E_TEST_S3_Bucket not set as environment variable"
     )
-
 
 BASE_CONFIG = {
     "max_cores": 4,
