@@ -30,6 +30,11 @@ def set_file_handler(logger, log_dir) -> None:
     """
     log_file = os.path.join(log_dir, "s3_upload.log")
 
+    if any([isinstance(x, TimedRotatingFileHandler) for x in logger.handlers]):
+        # log file handler already set
+        logger.info("Log file handler already set to %s", log_file)
+        return logger
+
     logger.info(
         "Initialised log fileHandler, setting log output to %s", log_file
     )
