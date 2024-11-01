@@ -120,9 +120,7 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
 
         # clean up the remote files we just uploaded
         bucket = boto3.resource("s3").Bucket(S3_BUCKET)
-        objects = bucket.objects.filter(
-            Prefix=cls.run_1_remote_path.replace("/sequencer_a", "")
-        )
+        objects = bucket.objects.filter(Prefix=cls.parent_remote_path)
         bucket.delete_objects(
             Delete={"Objects": [{"Key": obj.key} for obj in objects]}
         )
