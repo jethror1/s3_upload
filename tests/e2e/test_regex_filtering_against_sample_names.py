@@ -5,8 +5,8 @@ defined in the config file to limit what runs are uploaded
 We will create 3 runs in the same directory with different samplesheets,
 where the sample names in each inform what assay the sequencing is for.
 We will simulate monitoring with 2 patterns to upload from the same
-directory but to upload to 2 different remote paths, with one run not
-matching either pattern and should be ignored
+directory but to upload to 2 different remote paths for run_1 and run_2,
+with run_3 not matching either pattern and therefore should be omitted.
 """
 
 from argparse import Namespace
@@ -57,15 +57,15 @@ class TestConfigRegexPatternsAgainstSampleNames(unittest.TestCase):
                 x.replace("assay_1", code) for x in run_samplesheet
             ]
 
-            with open(os.path.join(run_dir, "samplesheet.csv")) as fh:
-                fh.write(run_samplesheet)
+            with open(os.path.join(run_dir, "samplesheet.csv"), "w") as fh:
+                fh.write("\n".join(run_samplesheet))
 
-        # define separate full unique paths to upload test runs to
+        # define separate full unique paths to upload test runs to by
+        # the assay type they're for
         now = datetime.now().strftime("%y%m%d_%H%M%S")
         cls.parent_remote_path = f"s3_upload_e2e_test/{now}"
         cls.run_1_remote_path = f"{cls.parent_remote_path}/assay_1"
         cls.run_2_remote_path = f"{cls.parent_remote_path}/assay_2"
-        cls.run_3_remote_path = f"{cls.parent_remote_path}/assay_3"
 
         config_file = os.path.join(TEST_DATA_DIR, "test_config.json")
 
@@ -89,14 +89,6 @@ class TestConfigRegexPatternsAgainstSampleNames(unittest.TestCase):
                         "bucket": S3_BUCKET,
                         "remote_path": cls.run_2_remote_path,
                         "sample_regex": "assay_2",
-                    },
-                    {
-                        "monitored_directories": [
-                            os.path.join(TEST_DATA_DIR, "sequencer_a"),
-                        ],
-                        "bucket": S3_BUCKET,
-                        "remote_path": cls.run_3_remote_path,
-                        "sample_regex": "assay_3",
                     },
                 ]
             )
@@ -148,3 +140,150 @@ class TestConfigRegexPatternsAgainstSampleNames(unittest.TestCase):
         cls.mock_args.stop()
         cls.mock_flock.stop()
         cls.mock_slack.stop()
+
+    def test_remote_files_uploaded_correctly(self):
+        """
+        Test that run_1 and run_2 both correctly upload to the expected
+        remote paths and that run_3 is not uploaded
+        """
+        local_files = [
+            "assay_1/run_1/RunInfo.xml",
+            "assay_1/run_1/CopyComplete.txt",
+            "assay_1/run_1/samplesheet.csv",
+            "assay_1/run_1/Config/Options.cfg",
+            "assay_1/run_1/InterOp/EventMetricsOut.bin",
+            "assay_2/run_2/RunInfo.xml",
+            "assay_2/run_2/CopyComplete.txt",
+            "assay_2/run_2/samplesheet.csv",
+            "assay_2/run_2/Config/Options.cfg",
+            "assay_2/run_2/InterOp/EventMetricsOut.bin",
+        ]
+
+        expected_remote_files = sorted(
+            [os.path.join(self.parent_remote_path, f) for f in local_files]
+        )
+
+        bucket = boto3.resource("s3").Bucket(S3_BUCKET)
+        uploaded_objects = bucket.objects.filter(
+            Prefix=self.parent_remote_path
+        )
+        uploaded_files = sorted([x.key for x in uploaded_objects])
+
+        self.assertEqual(uploaded_files, expected_remote_files)
+
+    def test_upload_log_files_for_fully_uploaded_run_1_correct(self):
+        """
+        Test the upload logs for run_1 from sequencer_a are as expected
+        """
+        expected_top_level_log_contents = {
+            "run_id": "run_1",
+            "run_path": self.run_1,
+            "completed": True,
+            "total_local_files": 5,
+            "total_uploaded_files": 5,
+            "total_failed_upload": 0,
+            "failed_upload_files": [],
+        }
+        expected_uploaded_files = [
+            "CopyComplete.txt",
+            "RunInfo.xml",
+            "samplesheet.csv",
+            "Config/Options.cfg",
+            "InterOp/EventMetricsOut.bin",
+        ]
+        expected_uploaded_files = [
+            os.path.join(self.run_1, f) for f in expected_uploaded_files
+        ]
+
+        upload_log = os.path.join(
+            TEST_DATA_DIR, "logs/uploads/run_1.upload.log.json"
+        )
+
+        with open(upload_log, "r") as fh:
+            log_contents = json.load(fh)
+
+        with self.subTest("correct top level of log"):
+            self.assertEqual(
+                log_contents,
+                {**log_contents, **expected_top_level_log_contents},
+            )
+
+        with self.subTest("correct local files uploaded in log"):
+            uploaded_files = sorted(log_contents["uploaded_files"].keys())
+
+            self.assertEqual(sorted(expected_uploaded_files), uploaded_files)
+
+    def test_upload_log_files_for_fully_uploaded_run_2_correct(self):
+        """
+        Test the upload logs for run_2 from sequencer_b are as expected
+        """
+        expected_top_level_log_contents = {
+            "run_id": "run_2",
+            "run_path": self.run_2,
+            "completed": True,
+            "total_local_files": 5,
+            "total_uploaded_files": 5,
+            "total_failed_upload": 0,
+            "failed_upload_files": [],
+        }
+        expected_uploaded_files = [
+            "CopyComplete.txt",
+            "RunInfo.xml",
+            "samplesheet.csv",
+            "Config/Options.cfg",
+            "InterOp/EventMetricsOut.bin",
+        ]
+        expected_uploaded_files = [
+            os.path.join(self.run_2, f) for f in expected_uploaded_files
+        ]
+
+        upload_log = os.path.join(
+            TEST_DATA_DIR, "logs/uploads/run_2.upload.log.json"
+        )
+
+        with open(upload_log, "r") as fh:
+            log_contents = json.load(fh)
+
+        with self.subTest("correct top level of log"):
+            self.assertEqual(
+                log_contents,
+                {**log_contents, **expected_top_level_log_contents},
+            )
+
+        with self.subTest("correct local files uploaded in log"):
+            uploaded_files = sorted(log_contents["uploaded_files"].keys())
+
+            self.assertEqual(sorted(expected_uploaded_files), uploaded_files)
+
+    def test_no_upload_log_generated_for_run_3(self):
+        """
+        Test that there is no upload log for run_3 since we have not
+        uploaded that run
+        """
+        self.assertFalse(
+            os.path.exists(
+                os.path.join(
+                    TEST_DATA_DIR, "logs/uploads/run_3.upload.log.json"
+                )
+            )
+        )
+
+    def test_slack_post_message_after_uploading_as_expected(self):
+        with self.subTest("only one Slack message sent"):
+            self.assertEqual(self.mock_slack.call_count, 1)
+
+        with self.subTest("correct webhook used"):
+            self.assertEqual(
+                self.mock_slack.call_args[1]["url"],
+                BASE_CONFIG["slack_log_webhook"],
+            )
+
+        with self.subTest("message formatted as expected"):
+            expected_message = (
+                ":white_check_mark: S3 Upload: Successfully uploaded 2"
+                " runs\n\t:black_square: run_1\n\t:black_square: run_2"
+            )
+
+            self.assertEqual(
+                self.mock_slack.call_args[1]["message"], expected_message
+            )
