@@ -113,6 +113,12 @@ class TestConfigRegexPatternsAgainstSampleNames(unittest.TestCase):
         # call the main entry point to run the upload
         s3_upload_main()
 
+        # capture the stdout/stderr logs written to log file for testing
+        with open(
+            os.path.join(TEST_DATA_DIR, "logs/s3_upload.log"), "r"
+        ) as fh:
+            cls.upload_log = fh.read().splitlines()
+
     @classmethod
     def tearDownClass(cls):
         """Clear up all the generated test data locally and in the bucket"""
@@ -287,3 +293,6 @@ class TestConfigRegexPatternsAgainstSampleNames(unittest.TestCase):
             self.assertEqual(
                 self.mock_slack.call_args[1]["message"], expected_message
             )
+
+    def test_no_errors_in_logs(self):
+        self.assertEqual([x for x in self.upload_log if "ERROR:" in x], [])
