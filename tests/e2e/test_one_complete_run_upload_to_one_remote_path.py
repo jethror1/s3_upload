@@ -1,11 +1,10 @@
 """
 End to end tests for running the upload in monitor mode.
 
-The below tests will fully simulate the upload process of a sequencing
-run by setting up test run structure, calling the main entry point and
-testing the upload behaviour. This requires that the script is able to
-authenticate with AWS as files are uploaded, and that a bucket is
-provided as the environment variable `E2E_TEST_S3_BUCKET`.
+The below tests will fully simulate the upload process of a single
+sequencing run by setting up test run structure, calling the main entry
+point and testing the upload behaviour. This is the minimal end to end
+upload scenario to test.
 """
 
 from argparse import Namespace
@@ -20,49 +19,34 @@ import shutil
 
 import boto3
 
-from e2e import TEST_DATA_DIR
+from e2e import BASE_CONFIG, S3_BUCKET, TEST_DATA_DIR
+from e2e.helper import create_files
 from s3_upload.s3_upload import main as s3_upload_main
 
 
-S3_BUCKET = os.environ.get("E2E_TEST_S3_BUCKET")
-
-if not S3_BUCKET:
-    raise AttributeError(
-        "Required E2E_TEST_S3_Bucket not set as environment variable"
-    )
-
-BASE_CONFIG = {
-    "max_cores": 4,
-    "max_threads": 8,
-    "log_level": "DEBUG",
-    "log_dir": "",
-    "slack_log_webhook": "https://slack_webhook_log_channel",
-    "slack_alert_webhook": "https://slack_webhook_log_channel",
-    "monitor": [],
-}
-
-
-class TestE2ESingleSuccessfulRun(unittest.TestCase):
+class TestSingleCompleteRun(unittest.TestCase):
+    """
+    End to end tests for a single complete run in a monitored directory
+    being correctly uploaded into the specified bucket and remote path.
+    """
 
     @classmethod
     def setUpClass(cls):
         # create test sequencing run in set monitored directory
         cls.run_1 = os.path.join(TEST_DATA_DIR, "sequencer_a", "run_1")
-        os.makedirs(cls.run_1, exist_ok=True)
-        os.makedirs(os.path.join(cls.run_1, "InterOp"), exist_ok=True)
-        os.makedirs(os.path.join(cls.run_1, "Config"), exist_ok=True)
 
-        # create as a complete run
-        open(os.path.join(cls.run_1, "RunInfo.xml"), "w").close()
-        open(os.path.join(cls.run_1, "CopyComplete.txt"), "w").close()
-        open(os.path.join(cls.run_1, "Config/Options.cfg"), "w").close()
-        open(
-            os.path.join(cls.run_1, "InterOp/EventMetricsOut.bin"),
-            "w",
-        ).close()
+        # create as a complete run with some example files
+        create_files(
+            cls.run_1,
+            "RunInfo.xml",
+            "CopyComplete.txt",
+            "Config/Options.cfg",
+            "InterOp/EventMetricsOut.bin",
+        )
+
         shutil.copy(
             os.path.join(TEST_DATA_DIR, "example_samplesheet.csv"),
-            os.path.join(cls.run_1, "run_1_samplesheet.csv"),
+            os.path.join(cls.run_1, "samplesheet.csv"),
         )
 
         # define full unique path to upload test runs to
@@ -139,7 +123,7 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
         local_files = [
             "RunInfo.xml",
             "CopyComplete.txt",
-            "run_1_samplesheet.csv",
+            "samplesheet.csv",
             "Config/Options.cfg",
             "InterOp/EventMetricsOut.bin",
         ]
@@ -163,7 +147,7 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
         """
         expected_top_level_log_contents = {
             "run_id": "run_1",
-            "run path": "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1",
+            "run_path": "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1",
             "completed": True,
             "total_local_files": 5,
             "total_uploaded_files": 5,
@@ -173,7 +157,7 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
         expected_uploaded_files = [
             "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1/CopyComplete.txt",
             "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1/RunInfo.xml",
-            "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1/run_1_samplesheet.csv",
+            "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1/samplesheet.csv",
             "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1/Config/Options.cfg",
             "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1/InterOp/EventMetricsOut.bin",
         ]
@@ -186,8 +170,9 @@ class TestE2ESingleSuccessfulRun(unittest.TestCase):
             log_contents = json.load(fh)
 
         with self.subTest("correct top level of log"):
-            self.assertDictContainsSubset(
-                expected_top_level_log_contents, log_contents
+            self.assertEqual(
+                log_contents,
+                {**log_contents, **expected_top_level_log_contents},
             )
 
         with self.subTest("correct local files uploaded in log"):
