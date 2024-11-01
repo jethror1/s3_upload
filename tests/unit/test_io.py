@@ -285,7 +285,7 @@ class TestWriteUploadStateToLog(unittest.TestCase):
 
         expected_log_contents = {
             "run_id": "test_run",
-            "run path": "/some/path/seq1/test_run",
+            "run_path": "/some/path/seq1/test_run",
             "completed": True,
             "total_local_files": 3,
             "total_uploaded_files": 3,
@@ -321,7 +321,7 @@ class TestWriteUploadStateToLog(unittest.TestCase):
 
         expected_log_contents = {
             "run_id": "test_run",
-            "run path": "/some/path/seq1/test_run",
+            "run_path": "/some/path/seq1/test_run",
             "completed": False,
             "total_local_files": 3,
             "total_uploaded_files": 2,
@@ -342,7 +342,7 @@ class TestWriteUploadStateToLog(unittest.TestCase):
         # failed file uploads
         partial_run_contents = {
             "run_id": "test_run",
-            "run path": "/some/path/seq1/test_run",
+            "run_path": "/some/path/seq1/test_run",
             "completed": False,
             "total_local_files": 3,
             "total_uploaded_files": 2,
@@ -367,7 +367,7 @@ class TestWriteUploadStateToLog(unittest.TestCase):
 
         expected_contents = {
             "run_id": "test_run",
-            "run path": "/some/path/seq1/test_run",
+            "run_path": "/some/path/seq1/test_run",
             "completed": True,
             "total_local_files": 3,
             "total_uploaded_files": 3,
@@ -400,7 +400,7 @@ class TestWriteUploadStateToLog(unittest.TestCase):
         # failed file uploads
         partial_run_contents = {
             "run_id": "test_run",
-            "run path": "/some/path/seq1/test_run",
+            "run_path": "/some/path/seq1/test_run",
             "completed": False,
             "total_local_files": 3,
             "total_uploaded_files": 1,
@@ -425,7 +425,7 @@ class TestWriteUploadStateToLog(unittest.TestCase):
 
         expected_contents = {
             "run_id": "test_run",
-            "run path": "/some/path/seq1/test_run",
+            "run_path": "/some/path/seq1/test_run",
             "completed": False,
             "total_local_files": 3,
             "total_uploaded_files": 2,

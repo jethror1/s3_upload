@@ -268,7 +268,7 @@ def write_upload_state_to_log(
     else:
         log_data = {
             "run_id": run_id,
-            "run path": run_path,
+            "run_path": run_path,
             "completed": False,
             "total_local_files": total_local_files,
             "total_uploaded_files": 0,

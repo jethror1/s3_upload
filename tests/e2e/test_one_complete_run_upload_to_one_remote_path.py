@@ -147,7 +147,7 @@ class TestSingleCompleteRun(unittest.TestCase):
         """
         expected_top_level_log_contents = {
             "run_id": "run_1",
-            "run path": "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1",
+            "run_path": "/home/jethro/Projects/s3_upload/tests/e2e/test_data/sequencer_a/run_1",
             "completed": True,
             "total_local_files": 5,
             "total_uploaded_files": 5,
