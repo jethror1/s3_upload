@@ -43,7 +43,7 @@ Available inputs for `monitor`:
 The behaviour for monitoring of directories for sequencing runs to upload is controlled through the use of a JSON config file. An example may be found [here](https://github.com/eastgenomics/s3_upload/blob/main/example/example_config.json).
 
 The top level keys that may be defined include:
-* `max_cores` (int | optional): maximum number of CPU cores to split uploading across (default: maximum available)
+* `max_cores` (`int` | optional): maximum number of CPU cores to split uploading across (default: maximum available)
 * `max_threads` (int | optional): the maximum number of threads to use per CPU core
 * `log_level` (str | optional): the level of logging to set, available options are defined [here](https://docs.python.org/3/library/logging.html#logging-levels)
 * `log_dir` (str | optional): path to where to store logs (default: `/var/log/s3_upload`)
