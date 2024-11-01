@@ -170,8 +170,9 @@ class TestSingleCompleteRun(unittest.TestCase):
             log_contents = json.load(fh)
 
         with self.subTest("correct top level of log"):
-            self.assertDictContainsSubset(
-                expected_top_level_log_contents, log_contents
+            self.assertEqual(
+                log_contents,
+                {**log_contents, **expected_top_level_log_contents},
             )
 
         with self.subTest("correct local files uploaded in log"):
