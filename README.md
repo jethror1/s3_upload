@@ -28,13 +28,14 @@ Available inputs for `upload`:
 * `--local_path` (required): path to sequencing run to upload
 * `--bucket` (required): existing S3 bucket with write permission for authenticated user
 * `--remote_path` (optional | default: `/`): path in bucket in which to upload the run
-* `cores` (optional | default: maximum available): total CPU cores to split uploading of files across
+* `--cores` (optional | default: maximum available): total CPU cores to split uploading of files across
 * `--threads` (optional | default: 4): total threads to use per CPU core for uploading
 
 
 Available inputs for `monitor`:
 * `--config`: path to JSON config file for monitoring (see below)
 * `--dry_run` (optional): calls everything except the actual upload to check what runs would be uploaded
+
 
 ## Config
 
@@ -78,6 +79,7 @@ Each dictionary inside of the list to monitor allows for setting separate upload
     ]
 ```
 *Example `monitor` config section defining two sets of monitored directories and upload locations*
+
 
 ## Logging
 

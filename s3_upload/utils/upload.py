@@ -113,7 +113,7 @@ def upload_single_file(
         ETag attribute of the uploaded file
     """
     # remove base directory and join to specified S3 location
-    upload_file = re.sub(rf"^{parent_path}", "", local_file)
+    upload_file = re.sub(rf"^{parent_path}", "", local_file).lstrip("/")
     upload_file = path.join(remote_path, upload_file).lstrip("/")
 
     log.debug("Uploading %s to %s:%s", local_file, bucket, upload_file)
@@ -211,7 +211,7 @@ def multi_thread_upload(
     list
         list of any files that failed to upload
     """
-    log.info("Uploading %s with %s threads", len(files), threads)
+    log.info("Uploading %s files with %s threads", len(files), threads)
 
     session = boto3.session.Session()
     s3_client = session.client(
@@ -284,8 +284,8 @@ def multi_core_upload(
         list of any files that failed to upload
     """
     log.info(
-        "Beginning uploading %s files with %s cores to%s:%s",
-        len(files),
+        "Beginning uploading %s files with %s cores to %s:%s",
+        sum([len(x) for x in files]),
         cores,
         bucket,
         remote_path,

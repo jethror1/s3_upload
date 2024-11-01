@@ -127,7 +127,7 @@ class TestCheckUploadState(unittest.TestCase):
         mock_log.return_value = {
             "run_id": "test_run",
             "run_path": "/some/path/to/test_run",
-            "uploaded": True,
+            "completed": True,
             "uploaded_files": {"file1.txt": "abc123", "file2.txt": "def456"},
         }
 
@@ -149,7 +149,7 @@ class TestCheckUploadState(unittest.TestCase):
         mock_log.return_value = {
             "run_id": "test_run",
             "run_path": "/some/path/to/test_run",
-            "uploaded": False,
+            "completed": False,
             "uploaded_files": {"file1.txt": "abc123", "file2.txt": "def456"},
         }
 

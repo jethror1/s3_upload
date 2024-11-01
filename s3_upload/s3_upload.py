@@ -1,21 +1,21 @@
 import argparse
-from os import cpu_count, path
+from os import cpu_count, makedirs, path
 from pathlib import Path
 import sys
 from timeit import default_timer as timer
 
-from utils.io import (
+from .utils.io import (
     acquire_lock,
     read_config,
     release_lock,
     write_upload_state_to_log,
 )
-from utils.upload import (
+from .utils.upload import (
     check_aws_access,
     check_buckets_exist,
     multi_core_upload,
 )
-from utils.utils import (
+from .utils.utils import (
     check_is_sequencing_run_dir,
     check_termination_file_exists,
     get_runs_to_upload,
@@ -25,8 +25,8 @@ from utils.utils import (
     verify_args,
     verify_config,
 )
-from utils.log import get_logger, set_file_handler
-import utils.slack as slack
+from .utils.log import get_logger, set_file_handler
+from .utils import slack
 
 
 log = get_logger("s3_upload")
@@ -175,7 +175,7 @@ def monitor_directories_for_upload(config, dry_run):
     # find all the runs to upload in the specified monitored directories
     # and build a dict per run with config of where to upload
     for monitor_dir_config in config["monitor"]:
-        completed_runs, partially_uploaded = get_runs_to_upload(
+        completed_runs, incomplete_runs = get_runs_to_upload(
             monitor_dir_config.get("monitored_directories"),
             log_dir=log_dir,
             sample_pattern=monitor_dir_config.get("sample_regex"),
@@ -192,7 +192,7 @@ def monitor_directories_for_upload(config, dry_run):
                 }
             )
 
-        for partial_run, uploaded_files in partially_uploaded.items():
+        for partial_run, uploaded_files in incomplete_runs.items():
             partially_uploaded.append(
                 {
                     "run_dir": partial_run,
@@ -206,7 +206,7 @@ def monitor_directories_for_upload(config, dry_run):
 
     if not to_upload and not partially_uploaded:
         log.info("No sequencing runs requiring upload found. Exiting now.")
-        sys.exit()
+        sys.exit(0)
 
     log.info(
         "Found %s new sequencing runs to upload: %s",
@@ -279,8 +279,9 @@ def monitor_directories_for_upload(config, dry_run):
         )
 
         # set output logs to go into subdirectory with stdout/stderr log
+        makedirs(path.join(log_dir, "uploads"), exist_ok=True)
         run_log_file = path.join(
-            log_dir, f"/uploads/{run_config['run_id']}.upload.log.json"
+            log_dir, f"uploads/{run_config['run_id']}.upload.log.json"
         )
 
         log_data = write_upload_state_to_log(
