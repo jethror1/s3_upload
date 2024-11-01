@@ -6,6 +6,7 @@ Uploads Illumina sequencing runs into AWS S3 storage.
 
 There are 2 modes implemented, one to interactively upload a single sequencing run, and another to monitor on a schedule (i.e. via cron) one or more directories for newly completed sequencing runs and automatically upload into a given S3 bucket location.
 
+All behaviour for the monitor mode is controlled by a JSON config file (described [below](https://github.com/eastgenomics/s3_upload?tab=readme-ov-file#config)).
 
 ## Usage
 
@@ -16,9 +17,9 @@ python3 s3_upload/s3_upload.py upload \
     --bucket myBucket
 ```
 
-Adding to a crontab for monitoring:
+Adding to a crontab for hourly monitoring:
 ```
-python3 s3_upload/s3_upload.py monitor --config /path/to/config.json
+0 * * * * python3 s3_upload/s3_upload.py monitor --config /path/to/config.json
 ```
 
 
@@ -132,7 +133,7 @@ optional arguments:
 
 
 ## Notes
-* When running in monitor mode, a file lock is acquired on `s3_upload.lock`, which by default will be written into the log directory. This ensures only a single upload process may run at once, preventing duplicate uploads of the same files.
+* When running in monitor mode, a file lock is acquired on `s3_upload.lock`, which by default will be written into the log directory. This ensures only a single upload process may run at once, preventing duplicate concurrent uploads of the same files.
 
 
 ## Pre-commit Hooks
