@@ -166,7 +166,7 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
         """
         expected_top_level_log_contents = {
             "run_id": "run_1",
-            "run path": self.run_1,
+            "run_path": self.run_1,
             "completed": True,
             "total_local_files": 5,
             "total_uploaded_files": 5,
@@ -186,6 +186,48 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
 
         upload_log = os.path.join(
             TEST_DATA_DIR, "logs/uploads/run_1.upload.log.json"
+        )
+
+        with open(upload_log, "r") as fh:
+            log_contents = json.load(fh)
+
+        with self.subTest("correct top level of log"):
+            self.assertEqual(
+                log_contents,
+                {**log_contents, **expected_top_level_log_contents},
+            )
+
+        with self.subTest("correct local files uploaded in log"):
+            uploaded_files = sorted(log_contents["uploaded_files"].keys())
+
+            self.assertEqual(sorted(expected_uploaded_files), uploaded_files)
+
+    def test_upload_log_files_for_fully_uploaded_run_2_correct(self):
+        """
+        Test the upload logs for run_2 from sequencer_b are as expected
+        """
+        expected_top_level_log_contents = {
+            "run_id": "run_2",
+            "run_path": self.run_2,
+            "completed": True,
+            "total_local_files": 5,
+            "total_uploaded_files": 5,
+            "total_failed_upload": 0,
+            "failed_upload_files": [],
+        }
+        expected_uploaded_files = [
+            "CopyComplete.txt",
+            "RunInfo.xml",
+            "samplesheet.csv",
+            "Config/Options.cfg",
+            "InterOp/EventMetricsOut.bin",
+        ]
+        expected_uploaded_files = [
+            os.path.join(self.run_2, f) for f in expected_uploaded_files
+        ]
+
+        upload_log = os.path.join(
+            TEST_DATA_DIR, "logs/uploads/run_2.upload.log.json"
         )
 
         with open(upload_log, "r") as fh:
