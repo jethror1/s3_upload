@@ -8,6 +8,7 @@ which we then expect to upload to `s3_upload_e2e_test/{now}/
 sequencer_a/run_1` and ``s3_upload_e2e_test/{now}/sequencer_b/run_2`
 respectively.
 """
+
 from argparse import Namespace
 from copy import deepcopy
 from datetime import datetime
@@ -48,35 +49,35 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
                 os.path.join(run, "samplesheet.csv"),
             )
 
-        # define full unique path to upload test runs to
+        # define separate full unique paths to upload test runs to
         now = datetime.now().strftime("%y%m%d_%H%M%S")
-        cls.run_1_remote_path = f"s3_upload_e2e_test/{now}/sequencer_a"
-        cls.run_2_remote_path = f"s3_upload_e2e_test/{now}/sequencer_b"
+        cls.parent_remote_path = f"s3_upload_e2e_test/{now}"
+        cls.run_1_remote_path = f"{cls.parent_remote_path}/sequencer_a"
+        cls.run_2_remote_path = f"{cls.parent_remote_path}/sequencer_b"
 
-        # add in the sequencer directories to monitor with test run
         config_file = os.path.join(TEST_DATA_DIR, "test_config.json")
-        config = deepcopy(BASE_CONFIG)
-        config["log_dir"] = os.path.join(TEST_DATA_DIR, "logs")
-        config["monitor"].extend(
-            [
-                {
-                    "monitored_directories": [
-                        os.path.join(TEST_DATA_DIR, "sequencer_a"),
-                    ],
-                    "bucket": S3_BUCKET,
-                    "remote_path": cls.run_1_remote_path,
-                },
-                {
-                    "monitored_directories": [
-                        os.path.join(TEST_DATA_DIR, "sequencer_b"),
-                    ],
-                    "bucket": S3_BUCKET,
-                    "remote_path": cls.run_2_remote_path,
-                },
-            ]
-        )
 
         with open(config_file, "w") as fh:
+            config = deepcopy(BASE_CONFIG)
+            config["log_dir"] = os.path.join(TEST_DATA_DIR, "logs")
+            config["monitor"].extend(
+                [
+                    {
+                        "monitored_directories": [
+                            os.path.join(TEST_DATA_DIR, "sequencer_a"),
+                        ],
+                        "bucket": S3_BUCKET,
+                        "remote_path": cls.run_1_remote_path,
+                    },
+                    {
+                        "monitored_directories": [
+                            os.path.join(TEST_DATA_DIR, "sequencer_b"),
+                        ],
+                        "bucket": S3_BUCKET,
+                        "remote_path": cls.run_2_remote_path,
+                    },
+                ]
+            )
             json.dump(config, fh)
 
         # mock command line args that would be set pointing to the config
@@ -100,6 +101,7 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        """Clear up all the generated test data locally and in the bucket"""
         shutil.rmtree(Path(cls.run_1).parent)
         shutil.rmtree(Path(cls.run_2).parent)
 
@@ -133,13 +135,71 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
         """
         Test that both runs upload correctly into the correct locations
         """
-        pass
+        local_files = [
+            "sequencer_a/run_1/RunInfo.xml",
+            "sequencer_a/run_1/CopyComplete.txt",
+            "sequencer_a/run_1/samplesheet.csv",
+            "sequencer_a/run_1/Config/Options.cfg",
+            "sequencer_a/run_1/InterOp/EventMetricsOut.bin",
+            "sequencer_b/run_2/RunInfo.xml",
+            "sequencer_b/run_2/CopyComplete.txt",
+            "sequencer_b/run_2/samplesheet.csv",
+            "sequencer_b/run_2/Config/Options.cfg",
+            "sequencer_b/run_2/InterOp/EventMetricsOut.bin",
+        ]
 
-    def test_upload_log_files_for_fully_uploaded_runs_correct(self):
+        expected_remote_files = sorted(
+            [os.path.join(self.parent_remote_path, f) for f in local_files]
+        )
+
+        bucket = boto3.resource("s3").Bucket(S3_BUCKET)
+        uploaded_objects = bucket.objects.filter(
+            Prefix=self.parent_remote_path
+        )
+        uploaded_files = sorted([x.key for x in uploaded_objects])
+
+        self.assertEqual(uploaded_files, expected_remote_files)
+
+    def test_upload_log_files_for_fully_uploaded_run_1_correct(self):
         """
-        Test the upload logs for both runs are as expected
+        Test the upload logs for run_1 from sequencer_a are as expected
         """
-        pass
+        expected_top_level_log_contents = {
+            "run_id": "run_1",
+            "run path": self.run_1,
+            "completed": True,
+            "total_local_files": 5,
+            "total_uploaded_files": 5,
+            "total_failed_upload": 0,
+            "failed_upload_files": [],
+        }
+        expected_uploaded_files = [
+            "CopyComplete.txt",
+            "RunInfo.xml",
+            "samplesheet.csv",
+            "Config/Options.cfg",
+            "InterOp/EventMetricsOut.bin",
+        ]
+        expected_uploaded_files = [
+            os.path.join(self.run_1, f) for f in expected_uploaded_files
+        ]
+
+        upload_log = os.path.join(
+            TEST_DATA_DIR, "logs/uploads/run_1.upload.log.json"
+        )
+
+        with open(upload_log, "r") as fh:
+            log_contents = json.load(fh)
+
+        with self.subTest("correct top level of log"):
+            self.assertDictContainsSubset(
+                expected_top_level_log_contents, log_contents
+            )
+
+        with self.subTest("correct local files uploaded in log"):
+            uploaded_files = sorted(log_contents["uploaded_files"].keys())
+
+            self.assertEqual(sorted(expected_uploaded_files), uploaded_files)
 
     def test_slack_post_message_after_uploading_as_expected(self):
         with self.subTest("only one Slack message sent"):
