@@ -104,7 +104,7 @@ The expected fields in this log file are:
 
 
 ## Docker
-A Dockerfile is provided for running the upload from within a Docker container. For convenience, the tool is bound to the command `s3_upload` in the container.
+A Dockerfile is provided for running the upload from within a Docker container. For convenience, the tool is aliased to the command `s3_upload` in the container.
 
 To build the Docker image: `docker build -t s3_upload:<tag> .`.
 
@@ -137,7 +137,7 @@ optional arguments:
 
 
 ## Pre-commit Hooks
-Pre-commit hooks are setup to enable secret scanning using [Yelp/detect-secrets](https://github.com/Yelp/detect-secrets?tab=readme-ov-file), this will prevent accidentally committing anything that may be sensitive (i.e. AWS credentials).
+For development pre-commit hooks are setup to enable secret scanning using [Yelp/detect-secrets](https://github.com/Yelp/detect-secrets?tab=readme-ov-file), this will attempt to prevent accidentally committing anything that may be sensitive (i.e. AWS credentials).
 
 This requires first installing [pre-commit](https://pre-commit.com/) and [detect-secrets](https://github.com/Yelp/detect-secrets?tab=readme-ov-file#installation), both may be installed with pip:
 ```
