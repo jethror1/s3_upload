@@ -141,7 +141,17 @@ def check_all_uploadable_samples(
         log.warning("Failed parsing samplenames from samplesheet")
         return None
 
-    return all([re.search(sample_pattern, x) for x in sample_names])
+    all_match = all([re.search(sample_pattern, x) for x in sample_names])
+
+    if all_match:
+        log.info("All samples in samplesheet match provided regex pattern")
+        return True
+    else:
+        log.info(
+            "One or more samples in samplsheet did not match provided regex. "
+            "Run will not be uploaded."
+        )
+        return False
 
 
 def get_runs_to_upload(
