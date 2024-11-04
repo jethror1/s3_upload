@@ -10,7 +10,6 @@ upload scenario to test.
 from argparse import Namespace
 from copy import deepcopy
 from datetime import datetime
-from glob import glob
 import json
 import unittest
 from unittest.mock import patch
@@ -25,6 +24,7 @@ from e2e.helper import (
     cleanup_remote_files,
     create_files,
 )
+
 from s3_upload.s3_upload import main as s3_upload_main
 
 
