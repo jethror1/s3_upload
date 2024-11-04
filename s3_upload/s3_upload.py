@@ -120,7 +120,7 @@ def upload_single_run(args):
         parsed command line arguments
     """
     check_aws_access()
-    check_buckets_exist(args.bucket)
+    check_buckets_exist([args.bucket])
 
     if not check_is_sequencing_run_dir(
         args.local_path
