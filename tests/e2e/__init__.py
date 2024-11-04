@@ -4,12 +4,12 @@ with AWS as files are uploaded, and that a bucket is provided as the
 environment variable `E2E_TEST_S3_BUCKET`.
 """
 
+from pathlib import Path
 import sys
 import os
 
-sys.path.append(
-    os.path.abspath(os.path.join(os.path.realpath(__file__), "../../../"))
-)
+sys.path.append(os.path.join(Path(__file__).parent.parent.parent, "s3_upload"))
+
 
 S3_BUCKET = os.environ.get("E2E_TEST_S3_BUCKET")
 
