@@ -394,19 +394,6 @@ def split_file_list_by_cores(files, n) -> List[List[str]]:
     return files
 
 
-def verify_args(args) -> None:
-    """
-    Verify that the provided args are valid
-
-    Parameters
-    ----------
-    args : argparse.NameSpace
-        parsed command line arguments
-    """
-    # TODO - complete this once I decide on all args to have
-    pass
-
-
 def verify_config(config) -> None:
     """
     Verify that config structure and parameters are valid
