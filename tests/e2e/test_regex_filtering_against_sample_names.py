@@ -1,12 +1,12 @@
 """
-End to end tests for uploading 2 completed sequencing runs that are
-in separate monitored directories and being uploaded into separate
-remote paths in the same specified bucket.
+End to end tests for monitoring runs to upload with regex patterns
+defined in the config file to limit what runs are uploaded
 
-We will create locally `sequencer_a/run_1` and `sequencer_b/run_2`
-which we then expect to upload to `s3_upload_e2e_test/{now}/
-sequencer_a/run_1` and ``s3_upload_e2e_test/{now}/sequencer_b/run_2`
-respectively.
+We will create 3 runs in the same directory with different samplesheets,
+where the sample names in each inform what assay the sequencing is for.
+We will simulate monitoring with 2 patterns to upload from the same
+directory but to upload to 2 different remote paths for run_1 and run_2,
+with run_3 not matching either pattern and therefore should be omitted.
 """
 
 from argparse import Namespace
@@ -27,33 +27,45 @@ from e2e.helper import create_files
 from s3_upload.s3_upload import main as s3_upload_main
 
 
-class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
+class TestConfigRegexPatternsAgainstSampleNames(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # create test sequencing runs in set monitored directories
+        # create test sequencing runs in one sequencer output directory
         cls.run_1 = os.path.join(TEST_DATA_DIR, "sequencer_a", "run_1")
-        cls.run_2 = os.path.join(TEST_DATA_DIR, "sequencer_b", "run_2")
+        cls.run_2 = os.path.join(TEST_DATA_DIR, "sequencer_a", "run_2")
+        cls.run_3 = os.path.join(TEST_DATA_DIR, "sequencer_a", "run_3")
+
+        codes = ["assay_1", "assay_2", "assay_3"]
+
+        with open(os.path.join(TEST_DATA_DIR, "example_samplesheet.csv")) as f:
+            base_samplesheet = f.read().splitlines()
 
         # create as a complete runs with some example files
-        for run in (cls.run_1, cls.run_2):
+        for run_dir, code in zip((cls.run_1, cls.run_2, cls.run_3), codes):
             create_files(
-                run,
+                run_dir,
                 "RunInfo.xml",
                 "CopyComplete.txt",
                 "Config/Options.cfg",
                 "InterOp/EventMetricsOut.bin",
             )
 
-            shutil.copy(
-                os.path.join(TEST_DATA_DIR, "example_samplesheet.csv"),
-                os.path.join(run, "samplesheet.csv"),
-            )
+            # example samplesheet has `assay_1` for all samples, replace
+            # this with the current assay code we want to write in
+            run_samplesheet = deepcopy(base_samplesheet)
+            run_samplesheet = [
+                x.replace("assay_1", code) for x in run_samplesheet
+            ]
 
-        # define separate full unique paths to upload test runs to
+            with open(os.path.join(run_dir, "samplesheet.csv"), "w") as fh:
+                fh.write("\n".join(run_samplesheet))
+
+        # define separate full unique paths to upload test runs to by
+        # the assay type they're for
         now = datetime.now().strftime("%y%m%d_%H%M%S")
         cls.parent_remote_path = f"s3_upload_e2e_test/{now}"
-        cls.run_1_remote_path = f"{cls.parent_remote_path}/sequencer_a"
-        cls.run_2_remote_path = f"{cls.parent_remote_path}/sequencer_b"
+        cls.run_1_remote_path = f"{cls.parent_remote_path}/assay_1"
+        cls.run_2_remote_path = f"{cls.parent_remote_path}/assay_2"
 
         config_file = os.path.join(TEST_DATA_DIR, "test_config.json")
 
@@ -68,13 +80,15 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
                         ],
                         "bucket": S3_BUCKET,
                         "remote_path": cls.run_1_remote_path,
+                        "sample_regex": "assay_1",
                     },
                     {
                         "monitored_directories": [
-                            os.path.join(TEST_DATA_DIR, "sequencer_b"),
+                            os.path.join(TEST_DATA_DIR, "sequencer_a"),
                         ],
                         "bucket": S3_BUCKET,
                         "remote_path": cls.run_2_remote_path,
+                        "sample_regex": "assay_2",
                     },
                 ]
             )
@@ -109,16 +123,14 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
     def tearDownClass(cls):
         """Clear up all the generated test data locally and in the bucket"""
         shutil.rmtree(Path(cls.run_1).parent)
-        shutil.rmtree(Path(cls.run_2).parent)
-
-        os.remove(
-            os.path.join(TEST_DATA_DIR, "logs/uploads/run_1.upload.log.json")
-        )
-        os.remove(
-            os.path.join(TEST_DATA_DIR, "logs/uploads/run_2.upload.log.json")
-        )
 
         os.remove(os.path.join(TEST_DATA_DIR, "test_config.json"))
+
+        # delete the per run log files
+        for log_file in glob(
+            os.path.join(TEST_DATA_DIR, "logs/uploads", "*log.json")
+        ):
+            os.remove(log_file)
 
         # delete the logger log files
         for log_file in glob(os.path.join(TEST_DATA_DIR, "logs", "*log*")):
@@ -135,21 +147,22 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
         cls.mock_flock.stop()
         cls.mock_slack.stop()
 
-    def test_remote_file_uploaded_correctly(self):
+    def test_remote_files_uploaded_correctly(self):
         """
-        Test that both runs upload correctly into the correct locations
+        Test that run_1 and run_2 both correctly upload to the expected
+        remote paths and that run_3 is not uploaded
         """
         local_files = [
-            "sequencer_a/run_1/RunInfo.xml",
-            "sequencer_a/run_1/CopyComplete.txt",
-            "sequencer_a/run_1/samplesheet.csv",
-            "sequencer_a/run_1/Config/Options.cfg",
-            "sequencer_a/run_1/InterOp/EventMetricsOut.bin",
-            "sequencer_b/run_2/RunInfo.xml",
-            "sequencer_b/run_2/CopyComplete.txt",
-            "sequencer_b/run_2/samplesheet.csv",
-            "sequencer_b/run_2/Config/Options.cfg",
-            "sequencer_b/run_2/InterOp/EventMetricsOut.bin",
+            "assay_1/run_1/RunInfo.xml",
+            "assay_1/run_1/CopyComplete.txt",
+            "assay_1/run_1/samplesheet.csv",
+            "assay_1/run_1/Config/Options.cfg",
+            "assay_1/run_1/InterOp/EventMetricsOut.bin",
+            "assay_2/run_2/RunInfo.xml",
+            "assay_2/run_2/CopyComplete.txt",
+            "assay_2/run_2/samplesheet.csv",
+            "assay_2/run_2/Config/Options.cfg",
+            "assay_2/run_2/InterOp/EventMetricsOut.bin",
         ]
 
         expected_remote_files = sorted(
@@ -248,6 +261,19 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
 
             self.assertEqual(sorted(expected_uploaded_files), uploaded_files)
 
+    def test_no_upload_log_generated_for_run_3(self):
+        """
+        Test that there is no upload log for run_3 since we have not
+        uploaded that run
+        """
+        self.assertFalse(
+            os.path.exists(
+                os.path.join(
+                    TEST_DATA_DIR, "logs/uploads/run_3.upload.log.json"
+                )
+            )
+        )
+
     def test_slack_post_message_after_uploading_as_expected(self):
         with self.subTest("only one Slack message sent"):
             self.assertEqual(self.mock_slack.call_count, 1)
@@ -267,33 +293,6 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
             self.assertEqual(
                 self.mock_slack.call_args[1]["message"], expected_message
             )
-
-    @patch("s3_upload.s3_upload.sys.exit")
-    def test_uploaded_run_not_picked_up_to_upload_again(self, mock_exit):
-        """
-        Test that when monitor runs again that the uploaded run does not
-        get triggered to upload again
-        """
-        with self.assertLogs("s3_upload") as log:
-            s3_upload_main()
-
-            self.assertIn(
-                "No sequencing runs requiring upload found. Exiting now.",
-                "".join(log.output),
-            )
-
-    @patch("s3_upload.s3_upload.sys.exit")
-    def test_when_nothing_to_upload_that_exit_code_is_zero(self, mock_exit):
-        """
-        Test that when there is nothing to upload that we cleanly exit
-        """
-        s3_upload_main()
-
-        with self.subTest("exit called"):
-            self.assertEqual(mock_exit.call_count, 1)
-
-        with self.subTest("exit code"):
-            self.assertEqual(mock_exit.call_args[0][0], 0)
 
     def test_no_errors_in_logs(self):
         self.assertEqual([x for x in self.upload_log if "ERROR:" in x], [])
