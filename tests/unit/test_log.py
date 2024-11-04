@@ -33,11 +33,11 @@ class TestSetFileHandler(unittest.TestCase):
         log.set_file_handler(cls.logger, Path(__file__).parent)
         cls.logger.setLevel(5)
 
-    # @classmethod
-    # def tearDownClass(cls):
-    #     log_file = os.path.join(Path(__file__).parent, "s3_upload.log")
-    #     if os.path.exists(log_file):
-    #         os.remove(log_file)
+    @classmethod
+    def tearDownClass(cls):
+        log_file = os.path.join(Path(__file__).parent, "s3_upload.log")
+        if os.path.exists(log_file):
+            os.remove(log_file)
 
     def test_file_handler_correctly_set(self):
 
