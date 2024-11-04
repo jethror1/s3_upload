@@ -18,6 +18,6 @@ jobs:
         pipenv install --dev
     - name: Test with pytest
       run: |
-        mkdir /var/log/s3_upload
-        chmod 664 /var/log/s3_upload
+        sudo mkdir /var/log/s3_upload
+        sudo chmod 664 /var/log/s3_upload
         pytest -v --cov --count 10 --random-order tests/unit/
