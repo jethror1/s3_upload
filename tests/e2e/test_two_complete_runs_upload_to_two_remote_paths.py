@@ -32,6 +32,9 @@ from s3_upload.s3_upload import main as s3_upload_main
 class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # clean up first in case of previous failed tests
+        cleanup_local_test_files()
+
         # create test sequencing runs in set monitored directories
         cls.run_1 = os.path.join(TEST_DATA_DIR, "sequencer_a", "run_1")
         cls.run_2 = os.path.join(TEST_DATA_DIR, "sequencer_b", "run_2")
@@ -111,6 +114,7 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
     def tearDownClass(cls):
 
         cleanup_local_test_files(cls.run_1, cls.run_2)
+        cleanup_remote_files(cls.parent_remote_path)
 
         cls.mock_args.stop()
         cls.mock_flock.stop()

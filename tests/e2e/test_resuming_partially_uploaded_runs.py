@@ -52,6 +52,9 @@ class TestInterruptAndResume(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # clean up first in case of previous failed tests
+        cleanup_local_test_files()
+
         # create test sequencing run in set monitored directory
         cls.run_1 = os.path.join(TEST_DATA_DIR, "sequencer_a", "run_1")
 
@@ -108,7 +111,7 @@ class TestInterruptAndResume(unittest.TestCase):
 
         # call the main entry point to run the upload, with a side effect
         # of failing to upload the RunInfo.xml file
-        patch_upload = patch("s3_upload.utils.upload.upload_single_file")
+        patch_upload = patch("utils.upload.upload_single_file")
         cls.mock_upload = patch_upload.start()
         cls.mock_upload.side_effect = cls.upload_side_effect
         s3_upload_main()

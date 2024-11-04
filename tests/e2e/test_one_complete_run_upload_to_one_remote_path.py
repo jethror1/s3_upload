@@ -36,6 +36,9 @@ class TestSingleCompleteRun(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # clean up first in case of previous failed tests
+        cleanup_local_test_files()
+
         # create test sequencing run in set monitored directory
         cls.run_1 = os.path.join(TEST_DATA_DIR, "sequencer_a", "run_1")
 
