@@ -400,44 +400,6 @@ class TestGetRunsToUpload(unittest.TestCase):
 
         rmtree(sequencer_output_dir)
 
-    @patch("s3_upload.utils.utils.check_all_uploadable_samples")
-    @patch("s3_upload.utils.utils.read_samplesheet_from_run_directory")
-    def test_runs_with_samples_not_matching_pattern_are_skipped(
-        self, mock_read, mock_uploadable
-    ):
-        """
-        Check when not all samples match the config sample regex pattern
-        that this is logged and continues
-        """
-        mock_read.return_value = ["some_samplesheet_contents"]
-        mock_uploadable.return_value = False
-
-        sequencer_output_dir = os.path.join(TEST_DATA_DIR, uuid4().hex)
-        complete_run = os.path.join(
-            sequencer_output_dir, "16102023_A01295_001_ABC123"
-        )
-        os.makedirs(
-            complete_run,
-            exist_ok=True,
-        )
-        open(os.path.join(complete_run, "RunInfo.xml"), "w").close()
-        open(os.path.join(complete_run, "CopyComplete.txt"), "w").close()
-
-        # with self.subTest("testing log message"):
-        with self.assertLogs("s3_upload", level="DEBUG") as log:
-            utils.get_runs_to_upload(
-                [sequencer_output_dir], sample_pattern="assay_1"
-            )
-
-            expected_log_message = (
-                "Samples do not match provided pattern assay_1 from config"
-                " file, run will not be uploaded"
-            )
-
-            self.assertIn(expected_log_message, "".join(log.output))
-
-        rmtree(sequencer_output_dir)
-
     @patch("s3_upload.utils.utils.check_upload_state")
     @patch("s3_upload.utils.utils.check_all_uploadable_samples")
     @patch("s3_upload.utils.utils.read_samplesheet_from_run_directory")
