@@ -4,18 +4,18 @@ from pathlib import Path
 import sys
 from timeit import default_timer as timer
 
-from .utils.io import (
+from utils.io import (
     acquire_lock,
     read_config,
     release_lock,
     write_upload_state_to_log,
 )
-from .utils.upload import (
+from utils.upload import (
     check_aws_access,
     check_buckets_exist,
     multi_core_upload,
 )
-from .utils.utils import (
+from utils.utils import (
     check_is_sequencing_run_dir,
     check_termination_file_exists,
     get_runs_to_upload,
@@ -25,8 +25,8 @@ from .utils.utils import (
     verify_args,
     verify_config,
 )
-from .utils.log import get_logger, set_file_handler
-from .utils import slack
+from utils.log import get_logger, set_file_handler
+from utils import slack
 
 
 log = get_logger("s3_upload")
