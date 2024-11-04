@@ -46,7 +46,9 @@ def cleanup_local_test_files(*run_dirs) -> None:
     for log_file in glob(path.join(TEST_DATA_DIR, "logs", "*log*")):
         remove(log_file)
 
-    remove(path.join(TEST_DATA_DIR, "logs/uploads/run_1.upload.log.json"))
+    for log_file in glob(path.join(TEST_DATA_DIR, "logs/uploads/", "*log*")):
+        remove(log_file)
+
     remove(path.join(TEST_DATA_DIR, "test_config.json"))
 
 
