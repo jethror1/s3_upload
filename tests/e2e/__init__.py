@@ -26,6 +26,6 @@ BASE_CONFIG = {
     "log_level": "DEBUG",
     "log_dir": "",
     "slack_log_webhook": "https://slack_webhook_log_channel",
-    "slack_alert_webhook": "https://slack_webhook_log_channel",
+    "slack_alert_webhook": "https://slack_webhook_alert_channel",
     "monitor": [],
 }
