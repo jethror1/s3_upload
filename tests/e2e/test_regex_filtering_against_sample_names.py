@@ -34,6 +34,9 @@ from s3_upload.s3_upload import main as s3_upload_main
 class TestConfigRegexPatternsAgainstSampleNames(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # clean up first in case of previous failed tests
+        cleanup_local_test_files()
+
         # create test sequencing runs in one sequencer output directory
         cls.run_1 = os.path.join(TEST_DATA_DIR, "sequencer_a", "run_1")
         cls.run_2 = os.path.join(TEST_DATA_DIR, "sequencer_a", "run_2")
