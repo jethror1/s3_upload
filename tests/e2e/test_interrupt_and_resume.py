@@ -6,14 +6,12 @@ all files, then resuming on the next run.
 from argparse import Namespace
 from copy import deepcopy
 from datetime import datetime
-from glob import glob
 import json
 import unittest
 from unittest.mock import patch
 import os
 import shutil
 
-import boto3
 
 from e2e import BASE_CONFIG, S3_BUCKET, TEST_DATA_DIR
 from e2e.helper import (
