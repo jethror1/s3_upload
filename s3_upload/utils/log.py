@@ -113,6 +113,7 @@ def get_logger(
         return logging.getLogger(logger_name)
 
     log_file = os.path.join(log_dir, "s3_upload.log")
+    check_write_permission_to_log_dir(log_dir)
 
     Path(log_dir).mkdir(parents=True, exist_ok=True)
     Path(log_file).touch(exist_ok=True)
