@@ -141,7 +141,17 @@ def check_all_uploadable_samples(
         log.warning("Failed parsing samplenames from samplesheet")
         return None
 
-    return all([re.search(sample_pattern, x) for x in sample_names])
+    all_match = all([re.search(sample_pattern, x) for x in sample_names])
+
+    if all_match:
+        log.info("All samples in samplesheet match provided regex pattern")
+        return True
+    else:
+        log.info(
+            "One or more samples in samplsheet did not match provided regex. "
+            "Run will not be uploaded."
+        )
+        return False
 
 
 def get_runs_to_upload(
@@ -217,11 +227,6 @@ def get_runs_to_upload(
                     samplesheet_contents=samplesheet_contents,
                     sample_pattern=sample_pattern,
                 ):
-                    log.info(
-                        "Samples do not match provided pattern %s from config"
-                        " file, run will not be uploaded",
-                        sample_pattern,
-                    )
                     continue
 
             upload_state, uploaded_files = check_upload_state(
@@ -387,19 +392,6 @@ def split_file_list_by_cores(files, n) -> List[List[str]]:
     files = [[x for x in y if x] for y in zip_longest(*files)]
 
     return files
-
-
-def verify_args(args) -> None:
-    """
-    Verify that the provided args are valid
-
-    Parameters
-    ----------
-    args : argparse.NameSpace
-        parsed command line arguments
-    """
-    # TODO - complete this once I decide on all args to have
-    pass
 
 
 def verify_config(config) -> None:

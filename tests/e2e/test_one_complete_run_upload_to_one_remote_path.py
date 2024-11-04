@@ -10,7 +10,6 @@ upload scenario to test.
 from argparse import Namespace
 from copy import deepcopy
 from datetime import datetime
-from glob import glob
 import json
 import unittest
 from unittest.mock import patch
@@ -20,7 +19,12 @@ import shutil
 import boto3
 
 from e2e import BASE_CONFIG, S3_BUCKET, TEST_DATA_DIR
-from e2e.helper import create_files
+from e2e.helper import (
+    cleanup_local_test_files,
+    cleanup_remote_files,
+    create_files,
+)
+
 from s3_upload.s3_upload import main as s3_upload_main
 
 
@@ -32,6 +36,9 @@ class TestSingleCompleteRun(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # clean up first in case of previous failed tests
+        cleanup_local_test_files()
+
         # create test sequencing run in set monitored directory
         cls.run_1 = os.path.join(TEST_DATA_DIR, "sequencer_a", "run_1")
 
@@ -97,24 +104,9 @@ class TestSingleCompleteRun(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        shutil.rmtree(cls.run_1)
 
-        os.remove(
-            os.path.join(TEST_DATA_DIR, "logs/uploads/run_1.upload.log.json")
-        )
-
-        os.remove(os.path.join(TEST_DATA_DIR, "test_config.json"))
-
-        # delete the logger log files
-        # for log_file in glob(os.path.join(TEST_DATA_DIR, "logs", "*log*")):
-        #     os.remove(log_file)
-
-        # clean up the remote files we just uploaded
-        bucket = boto3.resource("s3").Bucket(S3_BUCKET)
-        objects = bucket.objects.filter(Prefix=cls.remote_path)
-        bucket.delete_objects(
-            Delete={"Objects": [{"Key": obj.key} for obj in objects]}
-        )
+        cleanup_local_test_files(cls.run_1)
+        cleanup_remote_files(cls.remote_path)
 
         cls.mock_args.stop()
         cls.mock_flock.stop()

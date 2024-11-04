@@ -12,9 +12,7 @@ respectively.
 from argparse import Namespace
 from copy import deepcopy
 from datetime import datetime
-from glob import glob
 import json
-from pathlib import Path
 import unittest
 from unittest.mock import patch
 import os
@@ -23,13 +21,20 @@ import shutil
 import boto3
 
 from e2e import BASE_CONFIG, S3_BUCKET, TEST_DATA_DIR
-from e2e.helper import create_files
+from e2e.helper import (
+    cleanup_local_test_files,
+    cleanup_remote_files,
+    create_files,
+)
 from s3_upload.s3_upload import main as s3_upload_main
 
 
 class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # clean up first in case of previous failed tests
+        cleanup_local_test_files()
+
         # create test sequencing runs in set monitored directories
         cls.run_1 = os.path.join(TEST_DATA_DIR, "sequencer_a", "run_1")
         cls.run_2 = os.path.join(TEST_DATA_DIR, "sequencer_b", "run_2")
@@ -107,29 +112,9 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        """Clear up all the generated test data locally and in the bucket"""
-        shutil.rmtree(Path(cls.run_1).parent)
-        shutil.rmtree(Path(cls.run_2).parent)
 
-        os.remove(
-            os.path.join(TEST_DATA_DIR, "logs/uploads/run_1.upload.log.json")
-        )
-        os.remove(
-            os.path.join(TEST_DATA_DIR, "logs/uploads/run_2.upload.log.json")
-        )
-
-        os.remove(os.path.join(TEST_DATA_DIR, "test_config.json"))
-
-        # delete the logger log files
-        for log_file in glob(os.path.join(TEST_DATA_DIR, "logs", "*log*")):
-            os.remove(log_file)
-
-        # clean up the remote files we just uploaded
-        bucket = boto3.resource("s3").Bucket(S3_BUCKET)
-        objects = bucket.objects.filter(Prefix=cls.parent_remote_path)
-        bucket.delete_objects(
-            Delete={"Objects": [{"Key": obj.key} for obj in objects]}
-        )
+        cleanup_local_test_files(cls.run_1, cls.run_2)
+        cleanup_remote_files(cls.parent_remote_path)
 
         cls.mock_args.stop()
         cls.mock_flock.stop()
