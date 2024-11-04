@@ -22,7 +22,6 @@ from utils.utils import (
     get_sequencing_file_list,
     filter_uploaded_files,
     split_file_list_by_cores,
-    verify_args,
     verify_config,
 )
 from utils.log import get_logger, set_file_handler
