@@ -16,7 +16,13 @@ import shutil
 import boto3
 
 from e2e import BASE_CONFIG, S3_BUCKET, TEST_DATA_DIR
-from e2e.helper import create_files, read_upload_log, read_stdout_stderr_log
+from e2e.helper import (
+    cleanup_local_test_files,
+    cleanup_remote_files,
+    create_files,
+    read_upload_log,
+    read_stdout_stderr_log,
+)
 from s3_upload.s3_upload import main as s3_upload_main
 from s3_upload.utils.upload import upload_single_file
 
@@ -98,18 +104,19 @@ class TestInterruptAndResume(unittest.TestCase):
 
         # call the main entry point to run the upload, with a side effect
         # of failing to upload the RunInfo.xml file
-        with patch(
-            "s3_upload.utils.upload.upload_single_file",
-            side_effect=cls.upload_side_effect,
-        ) as mock_upload:
-            s3_upload_main()
+        patch_upload = patch("s3_upload.utils.upload.upload_single_file")
+        cls.mock_upload = patch_upload.start()
+        cls.mock_upload.side_effect = cls.upload_side_effect
+        s3_upload_main()
 
         # read in the log files after a partial upload to test state
         cls.partial_upload_log = read_upload_log()
         cls.partial_stdout_stderr_log = read_stdout_stderr_log()
 
         # call the upload again the simulate running on the next schedule
-        # when the upload should continue and complete
+        # when the upload should continue and complete, resetting the
+        # upload mock to just call the upload function
+        cls.mock_upload.side_effect = upload_single_file
         s3_upload_main()
 
         # read in the log files after a upload should have completed
@@ -118,29 +125,14 @@ class TestInterruptAndResume(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        shutil.rmtree(cls.run_1)
 
-        os.remove(
-            os.path.join(TEST_DATA_DIR, "logs/uploads/run_1.upload.log.json")
-        )
-
-        os.remove(os.path.join(TEST_DATA_DIR, "test_config.json"))
-
-        # delete the logger log files
-        for log_file in glob(os.path.join(TEST_DATA_DIR, "logs", "*log*")):
-            os.remove(log_file)
-
-        # clean up the remote files we just uploaded
-        bucket = boto3.resource("s3").Bucket(S3_BUCKET)
-        objects = bucket.objects.filter(Prefix=cls.remote_path)
-        objects = [{"Key": obj.key} for obj in objects]
-
-        if objects:
-            bucket.delete_objects(Delete={"Objects": objects})
+        cleanup_local_test_files(cls.run_1)
+        cleanup_remote_files(cls.remote_path)
 
         cls.mock_args.stop()
         cls.mock_flock.stop()
         cls.mock_slack.stop()
+        cls.mock_upload.stop()
 
     def test_partially_uploaded_log_file_as_expected(self):
         """
@@ -291,3 +283,12 @@ class TestInterruptAndResume(unittest.TestCase):
                 for x in self.partial_stdout_stderr_log
                 if expected_error_from_multi_core_upload in x
             ]
+
+    # def test_correct_number_calls_to_upload(self):
+    #     """
+    #     We expect on the first run that upload_single_file will be called
+    #     5 times included the one fail, on rerunning we should just call
+    #     the function once to upload the remaining failed file. Therefore
+    #     we should have 6 total calls to the function.
+    #     """
+    #     self.assertEqual(self.mock_upload.call_count, 6)
