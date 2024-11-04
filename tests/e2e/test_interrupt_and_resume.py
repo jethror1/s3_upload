@@ -283,12 +283,3 @@ class TestInterruptAndResume(unittest.TestCase):
                 for x in self.partial_stdout_stderr_log
                 if expected_error_from_multi_core_upload in x
             ]
-
-    # def test_correct_number_calls_to_upload(self):
-    #     """
-    #     We expect on the first run that upload_single_file will be called
-    #     5 times included the one fail, on rerunning we should just call
-    #     the function once to upload the remaining failed file. Therefore
-    #     we should have 6 total calls to the function.
-    #     """
-    #     self.assertEqual(self.mock_upload.call_count, 6)
