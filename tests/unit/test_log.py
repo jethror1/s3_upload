@@ -1,12 +1,89 @@
+import logging
+from logging.handlers import TimedRotatingFileHandler
 import os
 from pathlib import Path
 from shutil import rmtree
+from uuid import uuid4
 import unittest
+from unittest.mock import patch
 
 import pytest
 
 from unit import TEST_DATA_DIR
 from s3_upload.utils import log
+
+
+class TestGetConsoleHandler(unittest.TestCase):
+    handler = log.get_console_handler()
+
+    def test_stream_handler_returned(self):
+        self.assertIsInstance(self.handler, logging.StreamHandler)
+
+    def test_formatter_correctly_set(self):
+        self.assertEqual(
+            self.handler.formatter._fmt,
+            "%(asctime)s [%(module)s] %(levelname)s: %(message)s",
+        )
+
+
+class TestSetFileHandler(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.logger = log.get_logger("s3_upload", log_level=logging.INFO)
+        log.set_file_handler(cls.logger, Path(__file__).parent)
+        cls.logger.setLevel(5)
+
+    # @classmethod
+    # def tearDownClass(cls):
+    #     log_file = os.path.join(Path(__file__).parent, "s3_upload.log")
+    #     if os.path.exists(log_file):
+    #         os.remove(log_file)
+
+    def test_file_handler_correctly_set(self):
+
+        with self.subTest("correct format"):
+            self.assertEqual(
+                self.logger.handlers[0].formatter._fmt,
+                "%(asctime)s [%(module)s] %(levelname)s: %(message)s",
+            )
+
+        file_handler = [
+            x
+            for x in self.logger.handlers
+            if isinstance(x, TimedRotatingFileHandler)
+        ]
+
+        with self.subTest("correct rotation time"):
+            self.assertEqual(file_handler[0].when, "MIDNIGHT")
+
+        with self.subTest("correct backup count"):
+            self.assertEqual(file_handler[0].backupCount, 5)
+
+    def test_log_file_correctly_written_to(self):
+        """
+        The Logging object does not look to have the filename set as
+        an attribute, so we can test the correct specified file is
+        set by emitting a log message and reading from the file
+        """
+        self.logger.info("testing")
+
+        with open(os.path.join(Path(__file__).parent, "s3_upload.log")) as fh:
+            log_contents = fh.read()
+
+        self.assertIn("INFO: testing", log_contents)
+
+    def test_setting_file_twice_returns_the_handler(self):
+        log.set_file_handler(self.logger, Path(__file__).parent)
+
+        expected_message = (
+            "INFO: Log file handler already set to"
+            f" {os.path.join(Path(__file__).parent, 's3_upload.log')}"
+        )
+
+        with open(os.path.join(Path(__file__).parent, "s3_upload.log")) as fh:
+            log_contents = fh.read()
+
+        self.assertIn(expected_message, log_contents)
 
 
 class TestCheckWritePermissionToLogDir(unittest.TestCase):
@@ -48,3 +125,28 @@ class TestCheckWritePermissionToLogDir(unittest.TestCase):
 
         with pytest.raises(PermissionError, match=expected_error):
             log.check_write_permission_to_log_dir(test_log_dir)
+
+
+class TestGetLogger(unittest.TestCase):
+    def test_existing_logger_returned_when_already_exists(self):
+        # create new logger with a random name that won't already exist
+        random_log = uuid4().hex
+
+        logger = log.get_logger(
+            logger_name=random_log,
+            log_level=logging.INFO,
+            log_dir=Path(__file__).parent,
+        )
+
+        # try create the same logger again, test we return early by checking
+        # for calls to add the handler
+        with patch(
+            "s3_upload.utils.log.logging.Logger.addHandler"
+        ) as mock_handle:
+            logger = log.get_logger(
+                logger_name=random_log,
+                log_level=logging.INFO,
+                log_dir=Path(__file__).parent,
+            )
+
+            self.assertEqual(mock_handle.call_count, 0)
