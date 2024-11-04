@@ -16,7 +16,7 @@ import shutil
 import boto3
 
 from e2e import BASE_CONFIG, S3_BUCKET, TEST_DATA_DIR
-from e2e.helper import create_files
+from e2e.helper import create_files, read_upload_log, read_stdout_stderr_log
 from s3_upload.s3_upload import main as s3_upload_main
 from s3_upload.utils.upload import upload_single_file
 
@@ -104,32 +104,17 @@ class TestInterruptAndResume(unittest.TestCase):
         ) as mock_upload:
             s3_upload_main()
 
-        # read in the upload log after a partial upload to test state
-        with open(
-            os.path.join(TEST_DATA_DIR, "logs/uploads/run_1.upload.log.json"),
-            encoding="utf8",
-            mode="r",
-        ) as fh:
-            cls.partial_upload_log = json.load(fh)
+        # read in the log files after a partial upload to test state
+        cls.partial_upload_log = read_upload_log()
+        cls.partial_stdout_stderr_log = read_stdout_stderr_log()
 
-        # capture the stdout/stderr logs written to log file for testing
-        with open(
-            os.path.join(TEST_DATA_DIR, "logs/s3_upload.log"),
-            encoding="utf8",
-            mode="r",
-        ) as fh:
-            cls.upload_log = fh.read().splitlines()
-
-        # call the upload again the simulate running on the next hour
+        # call the upload again the simulate running on the next schedule
+        # when the upload should continue and complete
         s3_upload_main()
 
-        # read in the upload log after a upload should have completed
-        with open(
-            os.path.join(TEST_DATA_DIR, "logs/uploads/run_1.upload.log.json"),
-            encoding="utf8",
-            mode="r",
-        ) as fh:
-            cls.complete_upload_log = json.load(fh)
+        # read in the log files after a upload should have completed
+        cls.complete_upload_log = read_upload_log()
+        cls.complete_stdout_stderr_log = read_stdout_stderr_log()
 
     @classmethod
     def tearDownClass(cls):
@@ -246,4 +231,37 @@ class TestInterruptAndResume(unittest.TestCase):
             self.assertEqual(
                 [],
                 self.complete_upload_log["failed_upload_files"],
+            )
+
+    def test_slack_post_messages_as_expected(self):
+        """
+        Test that our failed and complete messages are both sent correctly
+        """
+
+        with self.subTest("correct number of messages sent"):
+            self.assertEqual(self.mock_slack.call_count, 2)
+
+        with self.subTest("failed upload correct"):
+            expected_call_args = {
+                "url": "https://slack_webhook_alert_channel",
+                "message": (
+                    ":x: S3 Upload: Failed uploading 1 runs\n\t:black_square:"
+                    " run_1"
+                ),
+            }
+            self.assertEqual(
+                self.mock_slack.call_args_list[0][1], expected_call_args
+            )
+
+        with self.subTest("complete upload correct"):
+            expected_call_args = {
+                "url": "https://slack_webhook_log_channel",
+                "message": (
+                    ":white_check_mark: S3 Upload: Successfully uploaded 1"
+                    " runs\n\t:black_square: run_1"
+                ),
+            }
+
+            self.assertEqual(
+                self.mock_slack.call_args_list[1][1], expected_call_args
             )
