@@ -120,7 +120,7 @@ def upload_single_run(args):
         parsed command line arguments
     """
     check_aws_access()
-    check_buckets_exist(args.bucket)
+    check_buckets_exist([args.bucket])
 
     if not check_is_sequencing_run_dir(
         args.local_path
@@ -139,6 +139,9 @@ def upload_single_run(args):
     # to ensure we upload into the actual run directory
     parent_path = Path(args.local_path).parent
 
+    # simple timer of upload
+    start = timer()
+
     multi_core_upload(
         files=files,
         bucket=args.bucket,
@@ -146,6 +149,15 @@ def upload_single_run(args):
         cores=args.cores,
         threads=args.threads,
         parent_path=parent_path,
+    )
+
+    end = timer()
+    total = end - start
+
+    log.info(
+        "Uploaded %s in %s",
+        args.local_path,
+        f"{int(total // 60)}m {int(total % 60)}s",
     )
 
 
