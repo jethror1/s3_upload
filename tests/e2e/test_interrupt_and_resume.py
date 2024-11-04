@@ -265,3 +265,29 @@ class TestInterruptAndResume(unittest.TestCase):
             self.assertEqual(
                 self.mock_slack.call_args_list[1][1], expected_call_args
             )
+
+    def test_error_message_for_failed_upload_in_partial_upload_log(self):
+
+        expected_error_from_upload_single_file = (
+            "ERROR: Error in uploading"
+            f" {os.path.join(TEST_DATA_DIR, 'sequencer_a/run_1', 'RunInfo.xml')}:"
+            " Interrupting upload of RunInfo.xml"
+        )
+
+        expected_error_from_multi_core_upload = (
+            "ERROR: 1 files failed to upload and will be logged for retrying"
+        )
+
+        with self.subTest("single_file_upload error log message"):
+            assert [
+                x
+                for x in self.partial_stdout_stderr_log
+                if expected_error_from_upload_single_file in x
+            ]
+
+        with self.subTest("multi_core_upload error log message"):
+            assert [
+                x
+                for x in self.partial_stdout_stderr_log
+                if expected_error_from_multi_core_upload in x
+            ]
