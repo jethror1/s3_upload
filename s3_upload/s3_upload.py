@@ -139,6 +139,9 @@ def upload_single_run(args):
     # to ensure we upload into the actual run directory
     parent_path = Path(args.local_path).parent
 
+    # simple timer of upload
+    start = timer()
+
     multi_core_upload(
         files=files,
         bucket=args.bucket,
@@ -146,6 +149,15 @@ def upload_single_run(args):
         cores=args.cores,
         threads=args.threads,
         parent_path=parent_path,
+    )
+
+    end = timer()
+    total = end - start
+
+    log.info(
+        "Uploaded %s in %s",
+        args.local_path,
+        f"{int(total // 60)}m {int(total % 60)}s",
     )
 
 
