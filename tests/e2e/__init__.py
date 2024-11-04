@@ -15,7 +15,7 @@ S3_BUCKET = os.environ.get("E2E_TEST_S3_BUCKET")
 
 if not S3_BUCKET:
     raise AttributeError(
-        "Required E2E_TEST_S3_Bucket not set as environment variable"
+        "Required E2E_TEST_S3_BUCKET not set as environment variable"
     )
 
 TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "test_data")
