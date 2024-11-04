@@ -10,6 +10,7 @@ upload scenario to test.
 from argparse import Namespace
 from copy import deepcopy
 from datetime import datetime
+from glob import glob
 import json
 import unittest
 from unittest.mock import patch
@@ -105,15 +106,16 @@ class TestSingleCompleteRun(unittest.TestCase):
         os.remove(os.path.join(TEST_DATA_DIR, "test_config.json"))
 
         # delete the logger log files
-        # for log_file in glob(os.path.join(TEST_DATA_DIR, "logs", "*log*")):
-        #     os.remove(log_file)
+        for log_file in glob(os.path.join(TEST_DATA_DIR, "logs", "*log*")):
+            os.remove(log_file)
 
         # clean up the remote files we just uploaded
         bucket = boto3.resource("s3").Bucket(S3_BUCKET)
         objects = bucket.objects.filter(Prefix=cls.remote_path)
-        bucket.delete_objects(
-            Delete={"Objects": [{"Key": obj.key} for obj in objects]}
-        )
+        objects = [{"Key": obj.key} for obj in objects]
+
+        if objects:
+            bucket.delete_objects(Delete={"Objects": objects})
 
         cls.mock_args.stop()
         cls.mock_flock.stop()
