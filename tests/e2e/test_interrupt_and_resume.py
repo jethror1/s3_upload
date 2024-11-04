@@ -1,6 +1,12 @@
 """
 End to end test for an upload being interrupted and failing to upload
 all files, then resuming on the next run.
+
+We will simulate this by mocking the upload_single_file method and raising
+an error for one of the files, then rerun the main function to simulate
+the script running again on schedule and continuing the upload. We can
+then test the state of the partial and complete uploads from the log files
+written to ensure they are as expected, and the calls to various functions.
 """
 
 from argparse import Namespace
