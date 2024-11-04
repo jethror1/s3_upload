@@ -79,7 +79,7 @@ def check_write_permission_to_log_dir(log_dir) -> None:
                 " have write permission for current user"
             )
         else:
-            break
+            return
 
 
 def get_logger(
@@ -108,7 +108,7 @@ def get_logger(
         raised when the specified log directory is not writeable if it
         already exists
     """
-    if logging.getLogger(logger_name).hasHandlers():
+    if logging.getLogger(logger_name).handlers:
         # logger already exists => use it
         return logging.getLogger(logger_name)
 
