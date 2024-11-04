@@ -111,7 +111,6 @@ class TestTwoCompleteRunsInSeparateMonitorDirectories(unittest.TestCase):
     def tearDownClass(cls):
 
         cleanup_local_test_files(cls.run_1, cls.run_2)
-        cleanup_remote_files(cls.run_1_remote_path.replace("/sequencer_a", ""))
 
         cls.mock_args.stop()
         cls.mock_flock.stop()
