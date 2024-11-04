@@ -6,6 +6,7 @@ Uploads Illumina sequencing runs into AWS S3 storage.
 
 There are 2 modes implemented, one to interactively upload a single sequencing run, and another to monitor on a schedule (i.e. via cron) one or more directories for newly completed sequencing runs and automatically upload into a given S3 bucket location.
 
+All behaviour for the monitor mode is controlled by a JSON config file (described [below](https://github.com/eastgenomics/s3_upload?tab=readme-ov-file#config)). It is intended to be set up to run on a schedule and monitor one or more directories for newly completed sequencing runs and automatically upload to specified AWS S3 bucket(s) and remote path(s). Multiple local and remote paths may be specified to monitor the output of multiple sequencers. Runs to upload may currently be filtered with regex patterns to match against the samples parsed from the samplesheet, where the sample names are informative of the assay / experiment to be uploaded.
 
 ## Usage
 
@@ -16,9 +17,9 @@ python3 s3_upload/s3_upload.py upload \
     --bucket myBucket
 ```
 
-Adding to a crontab for monitoring:
+Adding to a crontab for hourly monitoring:
 ```
-python3 s3_upload/s3_upload.py monitor --config /path/to/config.json
+0 * * * * python3 s3_upload/s3_upload.py monitor --config /path/to/config.json
 ```
 
 
@@ -42,19 +43,19 @@ Available inputs for `monitor`:
 The behaviour for monitoring of directories for sequencing runs to upload is controlled through the use of a JSON config file. An example may be found [here](https://github.com/eastgenomics/s3_upload/blob/main/example/example_config.json).
 
 The top level keys that may be defined include:
-* `max_cores` (int | optional): maximum number of CPU cores to split uploading across (default: maximum available)
-* `max_threads` (int | optional): the maximum number of threads to use per CPU core
-* `log_level` (str | optional): the level of logging to set, available options are defined [here](https://docs.python.org/3/library/logging.html#logging-levels)
-* `log_dir` (str | optional): path to where to store logs (default: `/var/log/s3_upload`)
-* `slack_log_webhook` (str | optional): Slack webhook URL to use for sending notifications on successful uploads, will try use `slack_alert_webhook` if not specified.
-* `slack_alert_webhook` (str | optional): Slack webhook URL to use for sending notifications on failed uploads, will try use `slack_log_webhook` if not specified.
+* `max_cores` (`int` | optional): maximum number of CPU cores to split uploading across (default: maximum available)
+* `max_threads` (`int` | optional): the maximum number of threads to use per CPU core
+* `log_level` (`str` | optional): the level of logging to set, available options are defined [here](https://docs.python.org/3/library/logging.html#logging-levels)
+* `log_dir` (`str` | optional): path to where to store logs (default: `/var/log/s3_upload`)
+* `slack_log_webhook` (`str` | optional): Slack webhook URL to use for sending notifications on successful uploads, will try use `slack_alert_webhook` if not specified.
+* `slack_alert_webhook` (`str` | optional): Slack webhook URL to use for sending notifications on failed uploads, will try use `slack_log_webhook` if not specified.
 
 
 Monitoring of specified directories for sequencing runs to upload are defined in a list of dictionaries under the `monitor` key. The available keys per monitor dictionary include:
-* `monitored_directories` (list | required): list of absolute paths to directories to monitor for new sequencing runs (i.e the location the sequencer outputs to)
-* `bucket` (str | required): name of S3 bucket to upload to
-* `remote_path` (str | required): parent path in which to upload sequencing run directories in the specified bucket
-* `sample_regex` (str | optional): regex pattern to match against all samples parsed from the samplesheet, all samples must match this pattern to upload the run. This is to be used for controlling upload of specific runs where samplenames inform the assay / test.
+* `monitored_directories` (`list` | required): list of absolute paths to directories to monitor for new sequencing runs (i.e the location the sequencer outputs to)
+* `bucket` (`str` | required): name of S3 bucket to upload to
+* `remote_path` (`str` | required): parent path in which to upload sequencing run directories in the specified bucket
+* `sample_regex` (`str` | optional): regex pattern to match against all samples parsed from the samplesheet, all samples must match this pattern to upload the run. This is to be used for controlling upload of specific runs where samplenames inform the assay / test.
 
 Each dictionary inside of the list to monitor allows for setting separate upload locations for each of the monitored directories. For example, in the below codeblock the output of both `sequencer_1` and `sequencer_2` would be uploaded to the root of `bucket_A`, and the output of `sequencer_3` would be uploaded into `sequencer_3_runs` in `bucket_B`. Any number of these dictionaries may be defined in the monitor list.
 
@@ -92,18 +93,18 @@ A JSON log file is written per sequencing run to upload that is stored in a `upl
 
 The expected fields in this log file are:
 
-* `run_id` (str) - the ID of the run (i.e. the name of the run directory)
-* `run_path` (str) - the absolute path to the run directory being uploaded
-* `completed` (bool) - the state of the run upload
-* `total_local_files` (int) - the total number of files in the run expected to upload
-* `total_uploaded_files` (int) - the total number of files that have been successfully uploaded
-* `total_failed_upload` (int) - the total number of files that failed to upload in the most recent upload attempt
-* `failed_upload_files` (list) - list of filepaths of files that failed to upload
-* `uploaded_files` (dict) - mapping of filename to ETag ID of successfully uploaded files
+* `run_id` (`str`) - the ID of the run (i.e. the name of the run directory)
+* `run_path` (`str`) - the absolute path to the run directory being uploaded
+* `completed` (`bool`) - the state of the run upload
+* `total_local_files` (`int`) - the total number of files in the run expected to upload
+* `total_uploaded_files` (`int`) - the total number of files that have been successfully uploaded
+* `total_failed_upload` (`int`) - the total number of files that failed to upload in the most recent upload attempt
+* `failed_upload_files` (`list`) - list of filepaths of files that failed to upload
+* `uploaded_files` (`dict`) - mapping of filename to ETag ID of successfully uploaded files
 
 
 ## Docker
-A Dockerfile is provided for running the upload from within a Docker container. For convenience, the tool is bound to the command `s3_upload` in the container.
+A Dockerfile is provided for running the upload from within a Docker container. For convenience, the tool is aliased to the command `s3_upload` in the container.
 
 To build the Docker image: `docker build -t s3_upload:<tag> .`.
 
@@ -132,11 +133,11 @@ optional arguments:
 
 
 ## Notes
-* When running in monitor mode, a file lock is acquired on `s3_upload.lock`, which by default will be written into the log directory. This ensures only a single upload process may run at once, preventing duplicate uploads of the same files.
+* When running in monitor mode, a file lock is acquired on `s3_upload.lock`, which by default will be written into the log directory. This ensures only a single upload process may run at once, preventing duplicate concurrent uploads of the same files.
 
 
 ## Pre-commit Hooks
-Pre-commit hooks are setup to enable secret scanning using [Yelp/detect-secrets](https://github.com/Yelp/detect-secrets?tab=readme-ov-file), this will prevent accidentally committing anything that may be sensitive (i.e. AWS credentials).
+For development pre-commit hooks are setup to enable secret scanning using [Yelp/detect-secrets](https://github.com/Yelp/detect-secrets?tab=readme-ov-file), this will attempt to prevent accidentally committing anything that may be sensitive (i.e. AWS credentials).
 
 This requires first installing [pre-commit](https://pre-commit.com/) and [detect-secrets](https://github.com/Yelp/detect-secrets?tab=readme-ov-file#installation), both may be installed with pip:
 ```
