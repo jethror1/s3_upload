@@ -48,30 +48,46 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def cleanup_remote_files(bucket, remote_path) -> None:
+    """
+    Clean up the uploaded test files from the remote path in the test
+    S3 bucket
+
+    Parameters
+    ----------
+    bucket : str
+        bucket where files were uploaded to
+    remote_path : str
+        path where files were uploaded to
+    """
+    print(f"Deleting files from {bucket}:{remote_path}")
+    bucket = boto3.resource("s3").Bucket(bucket)
+    objects = bucket.objects.filter(Prefix=remote_path)
+    objects = [{"Key": obj.key} for obj in objects]
+
+    if objects:
+        bucket.delete_objects(Delete={"Objects": objects})
+
+
 def main():
     args = parse_args()
 
     if not args.remote_path:
         args.remote_path = f"/benchmark_upload_{uuid4().hex}"
 
-    # dir_size = sizeof_fmt(os.path.getsize(Path(args.local_path).absolute()))
-
-    # total_files = len(
-    #     [
-    #         f
-    #         for f in listdir(args.local_path)
-    #         if isfile(join(args.local_path, f))
-    #     ]
-    # )
-
-    # print(total_files)
-    # print(dir_size)
-    # exit()
-
     print(f"Uploading benchmarking output to {args.bucket}:{args.remote_path}")
 
     # map pairs of cores and threads combinations to benchmark with
     cores_to_threads = [(x, y) for x in args.cores for y in args.threads]
+
+    benchmarks = []
+
+    import psutil
+
+    process = psutil.Process(os.getpid())
+    print(process.memory_info_ex().rss / 1024 / 1024)
+    process.memory_info_ex
+    exit()
 
     for core, thread in cores_to_threads:
         print(f"Beginning benchmarking with {core} cores and {thread} threads")
@@ -83,7 +99,17 @@ def main():
             bucket=args.bucket,
             remote_path=args.remote_path,
         )
-        print(upload_args)
+
+        start = timer()
+
+        upload_single_run(upload_args)
+
+        end = timer()
+        elapsed = end - start
+
+        print(f"Uploaded files in {elapsed}s")
+
+        cleanup_remote_files(bucket=args.bucket, remote_path=args.remote_path)
 
 
 if __name__ == "__main__":
