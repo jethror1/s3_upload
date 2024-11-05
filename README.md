@@ -111,7 +111,7 @@ The below benchmarks were output from running the script with the following argu
 
 These benchmarks were obtained from uploading a NovaSeq S1 flowcell sequencing run compromising of 102GB of data in X files. Uploading was done on a virtual server with X CPU, 16GB RAM and 1GB/s network bandwidth. Uploading will be highly dependent on network bandwidth availability, local storage speed, available compute resources etc. Upload time *should* scale approximately linearly with the total files/size of run. YMMV.
 
-
+**TODO - run the benchmarks and add table here**
 
 
 ## Docker
