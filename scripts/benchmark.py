@@ -226,7 +226,10 @@ def main():
     run_size = check_local_path_size(args.local_path)
     run_files = check_total_files(args.local_path)
 
-    print(f"\n{run_files} files ({run_size}) to benchmark uploading with")
+    print(
+        f"\n{run_files} files ({run_size}) to benchmark uploading with from"
+        f" {args.local_path}"
+    )
 
     print(f"\nUpload location set to {args.bucket}:{args.remote_path}")
 
@@ -261,8 +264,8 @@ def main():
 
         cleanup_remote_files(bucket=args.bucket, remote_path=args.remote_path)
 
-    for x in benchmarks:
-        print(x)
+    print("\nBenchmarking complete!\n")
+    print("\n".join(benchmarks))
 
 
 if __name__ == "__main__":
