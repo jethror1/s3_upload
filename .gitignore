@@ -161,3 +161,4 @@ tests/e2e/test_data/logs/*
 tests/e2e/test_data/tmp/*
 tests/e2e/test_data/sequencer_*
 tests/e2e/test_data/test_config.json
+s3_upload_benchmark*.tsv

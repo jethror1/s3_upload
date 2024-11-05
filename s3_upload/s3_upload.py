@@ -43,13 +43,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
     subparsers = parser.add_subparsers(
-        help="upload mode to run", dest="mode", required=True
+        help="Upload mode to run", dest="mode", required=True
     )
 
     monitor_parser = subparsers.add_parser(
         "monitor",
         help=(
-            "mode to be run on a schedule to monitor directories for newly"
+            "Mode to be run on a schedule to monitor directories for newly"
             " completed sequencing runs"
         ),
     )
@@ -57,21 +57,21 @@ def parse_args() -> argparse.Namespace:
     monitor_parser.add_argument(
         "--config",
         required=True,
-        help="config file for monitoring directories to upload",
+        help="Config file for monitoring directories to upload",
     )
     monitor_parser.add_argument(
         "--dry_run",
         default=False,
         action="store_true",
         help=(
-            "calls everything except the actual upload to check what runs"
+            "Calls everything except the actual upload to check what runs"
             " would be uploaded"
         ),
     )
 
     upload_parser = subparsers.add_parser(
         "upload",
-        help="mode to upload a single directory to given location in S3",
+        help="Mode to upload a single directory to given location in S3",
     )
 
     upload_parser.add_argument(
@@ -85,14 +85,25 @@ def parse_args() -> argparse.Namespace:
     upload_parser.add_argument(
         "--remote_path",
         default="/",
-        help="remote path in bucket to upload sequencing dir to",
+        help="Remote path in bucket to upload sequencing dir to",
+    )
+    upload_parser.add_argument(
+        "--skip_check",
+        default=False,
+        action="store_true",
+        help=(
+            "Controls if to skip checks for the provided directory being a"
+            " completed sequencing run. This allows for uploading any"
+            " arbitrary provided directory to AWS S3."
+        ),
     )
     upload_parser.add_argument(
         "--cores",
         required=False,
+        type=int,
         default=cpu_count(),
         help=(
-            "number of CPU cores to split total files to upload across, will "
+            "Number of CPU cores to split total files to upload across, will "
             "default to using all available"
         ),
     )
@@ -101,7 +112,7 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=8,
         help=(
-            "number of threads to open per core to split uploading across "
+            "Number of threads to open per core to split uploading across "
             "(default: 8)"
         ),
     )
@@ -121,15 +132,20 @@ def upload_single_run(args):
     check_aws_access()
     check_buckets_exist([args.bucket])
 
-    if not check_is_sequencing_run_dir(
-        args.local_path
-    ) or not check_termination_file_exists(args.local_path):
-        log.error(
-            "Provided directory: %s does not appear to be a complete "
-            "sequencing run. Please check the provided path and try again.",
-            args.local_path,
+    if not args.skip_check:
+        log.info(
+            "Checking if the provided directory is a complete sequencing run"
         )
-        exit()
+        if not check_is_sequencing_run_dir(
+            args.local_path
+        ) or not check_termination_file_exists(args.local_path):
+            log.error(
+                "Provided directory: %s does not appear to be a complete "
+                "sequencing run. Please check the provided path and try"
+                " again.",
+                args.local_path,
+            )
+            exit()
 
     files = get_sequencing_file_list(args.local_path)
     files = split_file_list_by_cores(files=files, n=args.cores)
