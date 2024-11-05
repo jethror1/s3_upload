@@ -100,6 +100,7 @@ def parse_args() -> argparse.Namespace:
     upload_parser.add_argument(
         "--cores",
         required=False,
+        type=int,
         default=cpu_count(),
         help=(
             "Number of CPU cores to split total files to upload across, will "
