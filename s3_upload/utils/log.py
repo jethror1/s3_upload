@@ -79,7 +79,7 @@ def check_write_permission_to_log_dir(log_dir) -> None:
                 " have write permission for current user"
             )
         else:
-            break
+            return
 
 
 def get_logger(
@@ -108,11 +108,12 @@ def get_logger(
         raised when the specified log directory is not writeable if it
         already exists
     """
-    if logging.getLogger(logger_name).hasHandlers():
+    if logging.getLogger(logger_name).handlers:
         # logger already exists => use it
         return logging.getLogger(logger_name)
 
     log_file = os.path.join(log_dir, "s3_upload.log")
+    check_write_permission_to_log_dir(log_dir)
 
     Path(log_dir).mkdir(parents=True, exist_ok=True)
     Path(log_file).touch(exist_ok=True)
