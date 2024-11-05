@@ -1,16 +1,13 @@
 import argparse
+from datetime import datetime
 import os
-from os import listdir
-from os.path import isfile, join
 from pathlib import Path
+import subprocess
 import sys
-from timeit import default_timer as timer
+from typing import Tuple
 from uuid import uuid4
 
-sys.path.append(os.path.join(Path(__file__).parent.parent, "s3_upload"))
-
-from s3_upload import upload_single_run
-from utils.utils import sizeof_fmt
+import boto3
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,6 +45,35 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def parse_time_output(stderr):
+    """
+    Parse the required fields from the stderr output of /usr/bin/time.
+
+    This contains key metrics such as CPU usage and max resident set
+    size (aka peak memory usage)
+
+    Parameters
+    ----------
+    stderr : list
+        stderr output from running the upload
+
+    Returns
+    -------
+    str
+        elapsed time (formatted as h:mm:ss or m:ss)
+    int
+        maximum resident set size (in kb)
+    """
+    elapsed_time = [x for x in stderr if x.startswith("Elapsed")][0].split()[
+        -1
+    ]
+    max_resident = [
+        x for x in stderr if x.startswith("Maximum resident set size")
+    ][0].split()[-1]
+
+    return elapsed_time, max_resident
+
+
 def cleanup_remote_files(bucket, remote_path) -> None:
     """
     Clean up the uploaded test files from the remote path in the test
@@ -69,45 +95,169 @@ def cleanup_remote_files(bucket, remote_path) -> None:
         bucket.delete_objects(Delete={"Objects": objects})
 
 
+def call_command(command) -> subprocess.CompletedProcess:
+    """
+    Call the given command with subprocess run
+
+    Parameters
+    ----------
+    command : str
+        command to call
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        completed process object
+
+    Raises
+    ------
+    SystemExit
+        Raised when provided command does not return a zero exit code
+    """
+    proc = subprocess.run(command, shell=True, capture_output=True)
+
+    if proc.returncode != 0:
+        print(f"Error in calling {command}")
+        print(proc.stderr.decode())
+        sys.exit(proc.returncode)
+
+    return proc
+
+
+def check_local_path_size(local_path) -> str:
+    """
+    Check the size of the provided directory to benchmark with using du
+
+    Parameters
+    ----------
+    local_path : str
+        path to check size of
+
+    Returns
+    -------
+    str
+        size of directory
+    """
+    proc = call_command(f"du -sh {local_path}")
+
+    return proc.stdout.decode().split()[0]
+
+
+def check_total_files(local_path) -> int:
+    """
+    Check the total number of files in the provided directory for uploading
+
+    Parameters
+    ----------
+    local_path : str
+        path to check size of
+
+    Returns
+    -------
+    int
+        total number of files found
+    """
+    proc = call_command(f"find {local_path} -type f | wc -l")
+
+    return proc.stdout.decode().strip()
+
+
+def run_upload(
+    local_path, bucket, remote_path, cores, threads
+) -> Tuple[str, int]:
+    """
+    Call the s3_upload script with the given parameters
+
+    We are going to use subprocess.run to call the script instead of
+    directly importing, this is so we can use GNU time to measure the
+    maximum resident set size since memory profiling in Python where
+    child processes are split across cores is a headache.
+
+    Parameters
+    ----------
+    local_path : str
+        path to check size of
+    bucket : str
+        S3 bucket to upload to
+    remote_path : str
+        path in bucket to upload to
+    cores : int
+        number of cores to provide to use
+    threads : int
+        number of threads to provide to use
+
+    Returns
+    -------
+    str
+        elapsed time (formatted as h:mm:ss or m:ss)
+    int
+        maximum resident set size (in kb)
+    """
+    script_path = os.path.join(
+        Path(__file__).absolute().parent.parent, "s3_upload/s3_upload.py"
+    )
+
+    command = (
+        f"/usr/bin/time -v python3 {script_path} upload --local_path"
+        f" {local_path} --bucket {bucket} --remote_path {remote_path} --cores"
+        f" {cores} --threads {threads}"
+    )
+
+    print(f"Calling uploader with:\n\t{command}")
+
+    proc = call_command(command)
+    stderr = proc.stderr.decode().replace("\t", "").splitlines()
+    elapsed_time, max_resident_set_size = parse_time_output(stderr)
+
+    print(f"Uploading completed in {elapsed_time}")
+
+    return elapsed_time, max_resident_set_size
+
+
 def main():
     args = parse_args()
 
     if not args.remote_path:
         args.remote_path = f"/benchmark_upload_{uuid4().hex}"
 
-    print(f"Uploading benchmarking output to {args.bucket}:{args.remote_path}")
-
     # map pairs of cores and threads combinations to benchmark with
     cores_to_threads = [(x, y) for x in args.cores for y in args.threads]
 
-    benchmarks = []
+    run_size = check_local_path_size(args.local_path)
+    run_files = check_total_files(args.local_path)
 
-    import psutil
+    print(f"\n{run_files} files ({run_size}) to benchmark uploading with")
 
-    process = psutil.Process(os.getpid())
-    print(process.memory_info_ex().rss / 1024 / 1024)
-    process.memory_info_ex
-    exit()
+    print(f"\nUpload location set to {args.bucket}:{args.remote_path}")
+
+    benchmarks = [
+        (
+            "# Benchmarking initiated at"
+            f" {datetime.now().strftime('%d-%m-%y %H:%M')}"
+        ),
+        (
+            f"# Provided arguments - cores: {args.cores} | threads:"
+            f" {args.threads} | local_path: {args.local_path} | bucket:"
+            f" {args.bucket} | remote_path: {args.remote_path}"
+        ),
+        f"# Total files to benchmark with: {run_files} ({run_size})",
+        f"cores\tthreads\elapsed time\tmaximum resident set size",
+    ]
 
     for core, thread in cores_to_threads:
-        print(f"Beginning benchmarking with {core} cores and {thread} threads")
+        print(
+            f"\nBeginning benchmarking with {core} cores and {thread} threads"
+        )
 
-        upload_args = argparse.Namespace(
-            cores=core,
-            threads=thread,
+        elapsed_time, max_set_size = run_upload(
             local_path=args.local_path,
             bucket=args.bucket,
             remote_path=args.remote_path,
+            cores=core,
+            threads=thread,
         )
 
-        start = timer()
-
-        upload_single_run(upload_args)
-
-        end = timer()
-        elapsed = end - start
-
-        print(f"Uploaded files in {elapsed}s")
+        benchmarks.append(f"{core}\t{thread}\t{elapsed_time}\t{max_set_size}")
 
         cleanup_remote_files(bucket=args.bucket, remote_path=args.remote_path)
 
