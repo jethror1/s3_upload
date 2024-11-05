@@ -259,7 +259,7 @@ def main():
             f" {args.bucket} | remote_path: {args.remote_path}"
         ),
         f"# Total files to benchmark with: {run_files} ({run_size})",
-        "cores\tthreads\telapsed time\tmaximum resident set size",
+        "cores\tthreads\telapsed time\tmaximum resident set size (mb)",
     ]
 
     for core, thread in cores_to_threads:
