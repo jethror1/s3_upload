@@ -169,7 +169,8 @@ def run_benchmark(
     local_path, bucket, remote_path, cores, threads
 ) -> Tuple[str, int]:
     """
-    Call the s3_upload script with the given parameters
+    Call the s3_upload script with the given parameters and capture both
+    the elapsed time and maximum resident set size (i.e. peak memory usage).
 
     We are going to use subprocess.run to call the script instead of
     directly importing, this is so we can use GNU time to measure the
@@ -194,7 +195,7 @@ def run_benchmark(
     str
         elapsed time (formatted as h:mm:ss or m:ss)
     int
-        maximum resident set size (in kb)
+        maximum resident set size (in mb)
     """
     script_path = os.path.join(
         Path(__file__).absolute().parent.parent, "s3_upload/s3_upload.py"
@@ -211,6 +212,7 @@ def run_benchmark(
     proc = call_command(command)
     stderr = proc.stderr.decode().replace("\t", "").splitlines()
     elapsed_time, max_resident_set_size = parse_time_output(stderr)
+    max_resident_set_size = max_resident_set_size / 1024
 
     print(f"Uploading completed in {elapsed_time}")
 
@@ -220,8 +222,10 @@ def run_benchmark(
 def main():
     args = parse_args()
 
+    now = datetime.now().strftime("%d-%m-%y_%H:%M")
+
     if not args.remote_path:
-        args.remote_path = f"/benchmark_upload_{uuid4().hex}"
+        args.remote_path = f"/benchmark_upload_{now}"
 
     # map pairs of cores and threads combinations to benchmark with
     cores_to_threads = [(x, y) for x in args.cores for y in args.threads]
@@ -237,17 +241,14 @@ def main():
     print(f"\nUpload location set to {args.bucket}:{args.remote_path}")
 
     benchmarks = [
-        (
-            "# Benchmarking initiated at"
-            f" {datetime.now().strftime('%d-%m-%y %H:%M')}"
-        ),
+        f"# Benchmarking initiated at {now}",
         (
             f"# Provided arguments - cores: {args.cores} | threads:"
             f" {args.threads} | local_path: {args.local_path} | bucket:"
             f" {args.bucket} | remote_path: {args.remote_path}"
         ),
         f"# Total files to benchmark with: {run_files} ({run_size})",
-        f"cores\tthreads\telapsed time\tmaximum resident set size",
+        "cores\tthreads\telapsed time\tmaximum resident set size",
     ]
 
     for core, thread in cores_to_threads:
@@ -267,7 +268,12 @@ def main():
 
         cleanup_remote_files(bucket=args.bucket, remote_path=args.remote_path)
 
-    print("\nBenchmarking complete!\n")
+    outfile = f"s3_upload_benchmark_{now}.tsv"
+
+    with open(outfile, mode="w", encoding="utf8") as fh:
+        fh.write("\n".join(benchmarks + ["\n"]))
+
+    print(f"\nBenchmarking complete!\n\nOutput written to {outfile}\n")
     print("\n".join(benchmarks))
 
 
