@@ -162,7 +162,7 @@ def check_total_files(local_path) -> int:
     return proc.stdout.decode().strip()
 
 
-def run_upload(
+def run_benchmark(
     local_path, bucket, remote_path, cores, threads
 ) -> Tuple[str, int]:
     """
@@ -182,9 +182,9 @@ def run_upload(
     remote_path : str
         path in bucket to upload to
     cores : int
-        number of cores to provide to use
+        list of number of cores to provide to use
     threads : int
-        number of threads to provide to use
+        list of number of threads to provide to use
 
     Returns
     -------
@@ -200,7 +200,7 @@ def run_upload(
     command = (
         f"/usr/bin/time -v python3 {script_path} upload --local_path"
         f" {local_path} --bucket {bucket} --remote_path {remote_path} --cores"
-        f" {cores} --threads {threads}"
+        f" {cores} --threads {threads} --skip_check"
     )
 
     print(f"Calling uploader with:\n\t{command}")
@@ -241,7 +241,7 @@ def main():
             f" {args.bucket} | remote_path: {args.remote_path}"
         ),
         f"# Total files to benchmark with: {run_files} ({run_size})",
-        f"cores\tthreads\elapsed time\tmaximum resident set size",
+        f"cores\tthreads\telapsed time\tmaximum resident set size",
     ]
 
     for core, thread in cores_to_threads:
@@ -249,7 +249,7 @@ def main():
             f"\nBeginning benchmarking with {core} cores and {thread} threads"
         )
 
-        elapsed_time, max_set_size = run_upload(
+        elapsed_time, max_set_size = run_benchmark(
             local_path=args.local_path,
             bucket=args.bucket,
             remote_path=args.remote_path,
@@ -260,6 +260,9 @@ def main():
         benchmarks.append(f"{core}\t{thread}\t{elapsed_time}\t{max_set_size}")
 
         cleanup_remote_files(bucket=args.bucket, remote_path=args.remote_path)
+
+    for x in benchmarks:
+        print(x)
 
 
 if __name__ == "__main__":
