@@ -33,12 +33,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cores",
         nargs="+",
+        type=int,
         required=True,
         help="list of numbers of cores to benchmark with",
     )
     parser.add_argument(
         "--threads",
         nargs="+",
+        type=int,
         required=True,
         help="list of numbers of threads to benchmark with",
     )
@@ -226,6 +228,10 @@ def run_benchmark(
 
 def main():
     args = parse_args()
+
+    assert (
+        max(args.cores) <= os.cpu_count()
+    ), "maximum specified number of cores exceeds available cores"
 
     now = datetime.now().strftime("%d-%m-%y_%H:%M")
 
