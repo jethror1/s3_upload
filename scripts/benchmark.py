@@ -5,7 +5,6 @@ from pathlib import Path
 import subprocess
 import sys
 from typing import Tuple
-from uuid import uuid4
 
 import boto3
 
