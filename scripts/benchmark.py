@@ -1,3 +1,9 @@
+"""
+Wrapper script for calling the uploader with given set of cores / threads
+to benchmark performance with each pair iteratively to determine the
+optimal to set for uploading
+"""
+
 import argparse
 from datetime import datetime
 import os
