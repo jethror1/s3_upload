@@ -29,6 +29,7 @@ Available inputs for `upload`:
 * `--local_path` (required): path to sequencing run to upload
 * `--bucket` (required): existing S3 bucket with write permission for authenticated user
 * `--remote_path` (optional | default: `/`): path in bucket in which to upload the run
+* `--skip_check` (optional | default: False): Controls if to skip checks for the provided directory being a completed sequencing run. Setting to false allows for uploading any arbitrary provided directory to AWS S3.
 * `--cores` (optional | default: maximum available): total CPU cores to split uploading of files across
 * `--threads` (optional | default: 4): total threads to use per CPU core for uploading
 
