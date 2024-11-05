@@ -91,8 +91,11 @@ def cleanup_remote_files(bucket, remote_path) -> None:
     objects = bucket.objects.filter(Prefix=remote_path)
     objects = [{"Key": obj.key} for obj in objects]
 
-    if objects:
-        bucket.delete_objects(Delete={"Objects": objects})
+    # delete_objects has a max request size of 1000 keys
+    objects = [objects[i : i + 1000] for i in range(0, len(objects), 1000)]
+
+    for sub_objects in objects:
+        bucket.delete_objects(Delete={"Objects": sub_objects})
 
 
 def call_command(command) -> subprocess.CompletedProcess:
