@@ -189,7 +189,10 @@ def multi_thread_upload(
     ordering: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/clients.html#caveat
 
     We will also set `disable_request_compression` since the majority of run
-    data will not compress and this reduces unneeded CPU and memory load.
+    data will not compress and this reduces unneeded CPU and memory load. In
+    addition, `tcp_keepalive` is set to ensure the session is kept alive.
+    Other available config parameters for the botocore Config object are here:
+    https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html
 
     Parameters
     ----------
@@ -219,6 +222,8 @@ def multi_thread_upload(
         config=Config(
             retries={"total_max_attempts": 10, "mode": "standard"},
             disable_request_compression=True,
+            tcp_keepalive=True,
+            max_pool_connections=100,
         ),
     )
 
