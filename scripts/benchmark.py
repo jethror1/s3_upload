@@ -29,12 +29,6 @@ def parse_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--profile_name",
-        required=True,
-        type=str,
-        help="Configured AWS profile_name to assume of",
-    )
-    parser.add_argument(
         "--local_path",
         required=True,
         help="path to sequencing run to benchmark with",
@@ -82,7 +76,7 @@ def get_peak_memory_usage() -> str:
     return round(max([float(x.split()[1]) for x in contents[1:]]), 2)
 
 
-def cleanup_remote_files(bucket, remote_path, profile_name) -> None:
+def cleanup_remote_files(bucket, remote_path) -> None:
     """
     Clean up the uploaded test files from the remote path in the test
     S3 bucket
@@ -93,13 +87,9 @@ def cleanup_remote_files(bucket, remote_path, profile_name) -> None:
         bucket where files were uploaded to
     remote_path : str
         path where files were uploaded to
-    profile_name : str
-        name of AWS profile to assume role of
     """
     print(f"Deleting uploaded files from {bucket}:{remote_path}")
-    bucket = (
-        boto3.Session(profile_name=profile_name).resource("s3").Bucket(bucket)
-    )
+    bucket = boto3.Session().resource("s3").Bucket(bucket)
     objects = bucket.objects.filter(Prefix=remote_path)
     objects = [{"Key": obj.key} for obj in objects]
 
@@ -181,7 +171,7 @@ def check_total_files(local_path) -> int:
 
 
 def run_benchmark(
-    profile_name, local_path, bucket, remote_path, cores, threads
+    local_path, bucket, remote_path, cores, threads
 ) -> Tuple[str, int]:
     """
     Call the s3_upload script with the given parameters and capture both
@@ -193,8 +183,6 @@ def run_benchmark(
 
     Parameters
     ----------
-    profile_name : str
-        name of AWS profile to assume role of
     local_path : str
         path to check size of
     bucket : str
@@ -221,7 +209,7 @@ def run_benchmark(
         "mprof run --include-children -o benchmark.out python3"
         f" {script_path} upload --local_path {local_path} --bucket"
         f" {bucket} --remote_path {remote_path} --cores {cores} --threads"
-        f" {threads} --skip_check --profile_name {profile_name}"
+        f" {threads} --skip_check"
     )
 
     print(f"Calling uploader with:\n\t{command}")
@@ -280,7 +268,6 @@ def main():
         )
 
         elapsed_time, max_set_size = run_benchmark(
-            profile_name=args.profile_name,
             local_path=args.local_path,
             bucket=args.bucket,
             remote_path=args.remote_path,
@@ -293,7 +280,6 @@ def main():
         cleanup_remote_files(
             bucket=args.bucket,
             remote_path=args.remote_path,
-            profile_name=args.profile_name,
         )
 
     outfile = f"s3_upload_benchmark_{now}.tsv"

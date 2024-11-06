@@ -54,12 +54,6 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     monitor_parser.add_argument(
-        "--profile_name",
-        required=True,
-        type=str,
-        help="Configured AWS profile_name to assume role from",
-    )
-    monitor_parser.add_argument(
         "--config",
         required=True,
         help="Config file for monitoring directories to upload",
@@ -77,12 +71,6 @@ def parse_args() -> argparse.Namespace:
     upload_parser = subparsers.add_parser(
         "upload",
         help="Mode to upload a single directory to given location in S3",
-    )
-    upload_parser.add_argument(
-        "--profile_name",
-        required=True,
-        type=str,
-        help="Configured AWS profile_name to assume role from",
     )
     upload_parser.add_argument(
         "--local_path", help="path to directory to upload"
@@ -139,8 +127,8 @@ def upload_single_run(args):
     args : argparse.NameSpace
         parsed command line arguments
     """
-    check_aws_access(args.profile_name)
-    check_buckets_exist(buckets=[args.bucket], profile_name=args.profile_name)
+    check_aws_access()
+    check_buckets_exist(buckets=[args.bucket])
 
     if not args.skip_check:
         log.info(
@@ -174,7 +162,6 @@ def upload_single_run(args):
         cores=args.cores,
         threads=args.threads,
         parent_path=parent_path,
-        profile_name=args.profile_name,
     )
 
     end = timer()
@@ -187,14 +174,12 @@ def upload_single_run(args):
     )
 
 
-def monitor_directories_for_upload(profile_name, config, dry_run):
+def monitor_directories_for_upload(config, dry_run):
     """
     Monitor specified directories for complete sequencing runs to upload
 
     Parameters
     ----------
-    profile_name : str
-        name of AWS profile to assume role of
     config : dict
         contents of config file
     dry_run : bool
@@ -202,10 +187,9 @@ def monitor_directories_for_upload(profile_name, config, dry_run):
     """
     log.info("Beginning monitoring directories for runs to upload")
 
-    check_aws_access(profile_name=profile_name)
+    check_aws_access()
     check_buckets_exist(
         buckets=set([x["bucket"] for x in config["monitor"]]),
-        profile_name=profile_name,
     )
 
     cores = config.get("max_cores", cpu_count)
@@ -319,7 +303,6 @@ def monitor_directories_for_upload(profile_name, config, dry_run):
             cores=cores,
             threads=threads,
             parent_path=run_config["parent_path"],
-            profile_name=profile_name,
         )
 
         # set output logs to go into subdirectory with stdout/stderr log
@@ -404,9 +387,7 @@ def main() -> None:
 
         set_file_handler(log, log_dir=log_dir)
 
-        monitor_directories_for_upload(
-            profile_name=args.profile_name, config=config, dry_run=args.dry_run
-        )
+        monitor_directories_for_upload(config=config, dry_run=args.dry_run)
 
         release_lock(lock_fd)
 
