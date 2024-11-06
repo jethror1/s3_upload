@@ -281,6 +281,7 @@ def main():
     for core, thread in cores_to_threads:
         print(
             f"\nBeginning benchmarking with {core} cores and {thread} threads"
+            f" at {datetime.now().strftime('%d-%m-%y %H:%M')}"
         )
 
         elapsed_time, max_set_size = run_benchmark(
