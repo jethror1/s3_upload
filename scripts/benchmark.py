@@ -90,7 +90,7 @@ def parse_time_output(stderr):
     max_resident = [
         x for x in stderr if x.startswith("Maximum resident set size")
     ][0].split()[-1]
-    max_resident = int(max_resident) / 1024
+    max_resident = round(int(max_resident) / 1024, 2)
 
     return elapsed_time, max_resident
 
