@@ -137,6 +137,7 @@ def call_command(command) -> subprocess.CompletedProcess:
 
     if proc.returncode != 0:
         print(f"Error in calling {command}")
+        print(proc.stdout.decode())
         print(proc.stderr.decode())
         sys.exit(proc.returncode)
 
