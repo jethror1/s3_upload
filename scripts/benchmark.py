@@ -101,11 +101,7 @@ def cleanup_remote_files(bucket, remote_path, profile) -> None:
         path where files were uploaded to
     """
     print(f"Deleting files from {bucket}:{remote_path}")
-    session = boto3.Session(profile_name=profile)
-    # client = session.client("s3")
-    resource = session.resource("s3")
-    bucket = resource.Bucket(bucket)
-    # bucket = boto3.resource("s3").Bucket(bucket)
+    bucket = boto3.Session(profile_name=profile).resource("s3").Bucket(bucket)
     objects = bucket.objects.filter(Prefix=remote_path)
     objects = [{"Key": obj.key} for obj in objects]
 
