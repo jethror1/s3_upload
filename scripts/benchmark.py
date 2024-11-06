@@ -26,6 +26,12 @@ def parse_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--profile_name",
+        required=True,
+        type=str,
+        help="Configured AWS profile name to assume role from",
+    )
+    parser.add_argument(
         "--local_path",
         required=True,
         help="path to sequencing run to benchmark with",
@@ -176,7 +182,7 @@ def check_total_files(local_path) -> int:
 
 
 def run_benchmark(
-    local_path, bucket, remote_path, cores, threads
+    profile_name, local_path, bucket, remote_path, cores, threads
 ) -> Tuple[str, int]:
     """
     Call the s3_upload script with the given parameters and capture both
@@ -214,7 +220,8 @@ def run_benchmark(
     command = (
         f"/usr/bin/time -v python3 {script_path} upload --local_path"
         f" {local_path} --bucket {bucket} --remote_path {remote_path} --cores"
-        f" {cores} --threads {threads} --skip_check"
+        f" {cores} --threads {threads} --skip_check --profile_name"
+        f" {profile_name}"
     )
 
     print(f"Calling uploader with:\n\t{command}")
@@ -270,6 +277,7 @@ def main():
         )
 
         elapsed_time, max_set_size = run_benchmark(
+            profile_name=args.profile_name,
             local_path=args.local_path,
             bucket=args.bucket,
             remote_path=args.remote_path,

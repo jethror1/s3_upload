@@ -73,6 +73,12 @@ def parse_args() -> argparse.Namespace:
         "upload",
         help="Mode to upload a single directory to given location in S3",
     )
+    upload_parser.add_argument(
+        "--profile_name",
+        required=True,
+        type=str,
+        help="Configured AWS profile name to assume role from",
+    )
 
     upload_parser.add_argument(
         "--local_path", help="path to directory to upload"
@@ -129,7 +135,7 @@ def upload_single_run(args):
     args : argparse.NameSpace
         parsed command line arguments
     """
-    check_aws_access()
+    check_aws_access(args.profile_name)
     check_buckets_exist([args.bucket])
 
     if not args.skip_check:
@@ -164,6 +170,7 @@ def upload_single_run(args):
         cores=args.cores,
         threads=args.threads,
         parent_path=parent_path,
+        profile=args.profile_name,
     )
 
     end = timer()
@@ -189,7 +196,7 @@ def monitor_directories_for_upload(config, dry_run):
     """
     log.info("Beginning monitoring directories for runs to upload")
 
-    check_aws_access()
+    check_aws_access(config["profile_name"])
     check_buckets_exist(set([x["bucket"] for x in config["monitor"]]))
 
     cores = config.get("max_cores", cpu_count)
@@ -303,6 +310,7 @@ def monitor_directories_for_upload(config, dry_run):
             cores=cores,
             threads=threads,
             parent_path=run_config["parent_path"],
+            profile=config["profile_name"],
         )
 
         # set output logs to go into subdirectory with stdout/stderr log
@@ -384,6 +392,7 @@ def main() -> None:
         lock_fd = acquire_lock(lock_file=path.join(log_dir, "s3_upload.lock"))
 
         verify_config(config=config)
+        config["profile_name"] = args.profile_name
 
         set_file_handler(log, log_dir=log_dir)
 

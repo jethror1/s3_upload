@@ -20,7 +20,7 @@ from .log import get_logger
 log = get_logger("s3_upload")
 
 
-def check_aws_access():
+def check_aws_access(profile):
     """
     Check authentication with AWS S3 with stored credentials by checking
     access to all buckets
@@ -37,7 +37,9 @@ def check_aws_access():
     """
     log.info("Checking access to AWS")
     try:
-        return list(boto3.Session().resource("s3").buckets.all())
+        return list(
+            boto3.Session(profile_name=profile).resource("s3").buckets.all()
+        )
     except s3_exceptions.ClientError as err:
         raise RuntimeError(f"Error in connecting to AWS: {err}") from err
 
@@ -178,7 +180,7 @@ def _submit_to_pool(pool, func, item_input, items, **kwargs):
 
 
 def multi_thread_upload(
-    files, bucket, remote_path, threads, parent_path
+    files, bucket, remote_path, threads, parent_path, profile
 ) -> Tuple[Dict[str, str], list]:
     """
     Uploads the given set of `files` to S3 on a single CPU core using
@@ -216,7 +218,7 @@ def multi_thread_upload(
     """
     log.info("Uploading %s files with %s threads", len(files), threads)
 
-    session = boto3.session.Session()
+    session = boto3.session.Session(profile_name=profile)
     s3_client = session.client(
         "s3",
         config=Config(
@@ -259,7 +261,7 @@ def multi_thread_upload(
 
 
 def multi_core_upload(
-    files, bucket, remote_path, cores, threads, parent_path
+    files, bucket, remote_path, cores, threads, parent_path, profile
 ) -> Tuple[Dict[str, str], list]:
     """
     Call the multi_thread_upload on `files` split across n
@@ -309,6 +311,7 @@ def multi_core_upload(
             remote_path=remote_path,
             parent_path=parent_path,
             threads=threads,
+            profile=profile,
         )
 
         for future in as_completed(concurrent_jobs):
