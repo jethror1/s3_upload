@@ -88,7 +88,7 @@ def parse_time_output(stderr):
     return elapsed_time, max_resident
 
 
-def cleanup_remote_files(bucket, remote_path) -> None:
+def cleanup_remote_files(bucket, remote_path, profile) -> None:
     """
     Clean up the uploaded test files from the remote path in the test
     S3 bucket
@@ -101,7 +101,10 @@ def cleanup_remote_files(bucket, remote_path) -> None:
         path where files were uploaded to
     """
     print(f"Deleting files from {bucket}:{remote_path}")
-    bucket = boto3.resource("s3").Bucket(bucket)
+    session = boto3.Session(profile_name=profile)
+    client = session.client("s3")
+    bucket = client.Bucket(bucket)
+    # bucket = boto3.resource("s3").Bucket(bucket)
     objects = bucket.objects.filter(Prefix=remote_path)
     objects = [{"Key": obj.key} for obj in objects]
 
@@ -288,7 +291,11 @@ def main():
 
         benchmarks.append(f"{core}\t{thread}\t{elapsed_time}\t{max_set_size}")
 
-        cleanup_remote_files(bucket=args.bucket, remote_path=args.remote_path)
+        cleanup_remote_files(
+            bucket=args.bucket,
+            remote_path=args.remote_path,
+            profile=args.profile_name,
+        )
 
     outfile = f"s3_upload_benchmark_{now}.tsv"
 
