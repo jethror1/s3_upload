@@ -136,7 +136,7 @@ def upload_single_run(args):
         parsed command line arguments
     """
     check_aws_access(args.profile_name)
-    check_buckets_exist([args.bucket])
+    check_buckets_exist(buckets=[args.bucket], profile=args.profile_name)
 
     if not args.skip_check:
         log.info(
