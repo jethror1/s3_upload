@@ -81,11 +81,13 @@ def parse_time_output(stderr):
         -1
     ]
 
-    # elapsed time may be hh:mm:ss or mm:ss.ms
-    # trim off milliseconds and prepend 0: if <1 hours for consistency
+    # elapsed time may be h:m:ss or m:ss.ms, trim off milliseconds and
+    # prefix h and m with 0 for consistency (i.e. as hh:mm:ss)
     elapsed_time = elapsed_time.split(".")[0]
     if elapsed_time.count(":") == 1:
-        elapsed_time = f"0:{elapsed_time}"
+        elapsed_time = f"00:{elapsed_time}"
+    hours, minutes, seconds = elapsed_time.split(":")
+    elapsed_time = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
 
     max_resident = [
         x for x in stderr if x.startswith("Maximum resident set size")
