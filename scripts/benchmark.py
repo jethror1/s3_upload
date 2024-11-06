@@ -69,7 +69,7 @@ def parse_time_output(stderr):
     str
         elapsed time (formatted as h:mm:ss or m:ss)
     int
-        maximum resident set size (in kb)
+        maximum resident set size (in mb)
     """
     elapsed_time = [x for x in stderr if x.startswith("Elapsed")][0].split()[
         -1
@@ -77,6 +77,7 @@ def parse_time_output(stderr):
     max_resident = [
         x for x in stderr if x.startswith("Maximum resident set size")
     ][0].split()[-1]
+    max_resident = int(max_resident) / 1024
 
     return elapsed_time, max_resident
 
@@ -219,7 +220,6 @@ def run_benchmark(
     proc = call_command(command)
     stderr = proc.stderr.decode().replace("\t", "").splitlines()
     elapsed_time, max_resident_set_size = parse_time_output(stderr)
-    max_resident_set_size = max_resident_set_size / 1024
 
     print(f"Uploading completed in {elapsed_time}")
 
