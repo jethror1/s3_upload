@@ -125,7 +125,9 @@ def call_command(command) -> subprocess.CompletedProcess:
     SystemExit
         Raised when provided command does not return a zero exit code
     """
-    proc = subprocess.run(command, shell=True, capture_output=True)
+    proc = subprocess.run(
+        command, shell=True, check=False, capture_output=True
+    )
 
     if proc.returncode != 0:
         print(f"Error in calling {command}")
