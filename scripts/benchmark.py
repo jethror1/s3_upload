@@ -14,8 +14,9 @@ from time import gmtime, strftime
 from timeit import default_timer as timer
 from typing import Tuple
 
-
 import boto3
+
+AWS_DEFAULT_PROFILE = os.environ.get("AWS_DEFAULT_PROFILE")
 
 
 def parse_args() -> argparse.Namespace:
@@ -89,7 +90,11 @@ def cleanup_remote_files(bucket, remote_path) -> None:
         path where files were uploaded to
     """
     print(f"Deleting uploaded files from {bucket}:{remote_path}")
-    bucket = boto3.Session().resource("s3").Bucket(bucket)
+    bucket = (
+        boto3.Session(profile_name=AWS_DEFAULT_PROFILE)
+        .resource("s3")
+        .Bucket(bucket)
+    )
     objects = bucket.objects.filter(Prefix=remote_path)
     objects = [{"Key": obj.key} for obj in objects]
 

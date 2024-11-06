@@ -5,7 +5,7 @@ from concurrent.futures import (
     ThreadPoolExecutor,
     as_completed,
 )
-from os import path
+from os import environ, path
 import re
 from typing import Dict, List, Tuple
 
@@ -16,6 +16,7 @@ from botocore import exceptions as s3_exceptions
 
 from .log import get_logger
 
+AWS_DEFAULT_PROFILE = environ.get("AWS_DEFAULT_PROFILE")
 
 log = get_logger("s3_upload")
 
@@ -69,7 +70,11 @@ def check_buckets_exist(buckets) -> List[dict]:
     for bucket in buckets:
         try:
             log.debug("Checking %s exists and accessible", bucket)
-            valid.append(boto3.client("s3").head_bucket(Bucket=bucket))
+            valid.append(
+                boto3.Session(profile_name=AWS_DEFAULT_PROFILE)
+                .client("s3")
+                .head_bucket(Bucket=bucket)
+            )
         except s3_exceptions.ClientError:
             invalid.append(bucket)
 
@@ -217,7 +222,7 @@ def multi_thread_upload(
     """
     log.info("Uploading %s files with %s threads", len(files), threads)
 
-    session = boto3.session.Session()
+    session = boto3.session.Session(profile_name=AWS_DEFAULT_PROFILE)
     s3_client = session.client(
         "s3",
         config=Config(
