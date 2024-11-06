@@ -29,7 +29,7 @@ def parse_args() -> argparse.Namespace:
         "--profile_name",
         required=True,
         type=str,
-        help="Configured AWS profile name to assume role from",
+        help="Configured AWS profile_name to assume of",
     )
     parser.add_argument(
         "--local_path",
@@ -88,7 +88,7 @@ def parse_time_output(stderr):
     return elapsed_time, max_resident
 
 
-def cleanup_remote_files(bucket, remote_path, profile) -> None:
+def cleanup_remote_files(bucket, remote_path, profile_name) -> None:
     """
     Clean up the uploaded test files from the remote path in the test
     S3 bucket
@@ -99,9 +99,13 @@ def cleanup_remote_files(bucket, remote_path, profile) -> None:
         bucket where files were uploaded to
     remote_path : str
         path where files were uploaded to
+    profile_name : str
+        name of AWS profile to assume role of
     """
     print(f"Deleting files from {bucket}:{remote_path}")
-    bucket = boto3.Session(profile_name=profile).resource("s3").Bucket(bucket)
+    bucket = (
+        boto3.Session(profile_name=profile_name).resource("s3").Bucket(bucket)
+    )
     objects = bucket.objects.filter(Prefix=remote_path)
     objects = [{"Key": obj.key} for obj in objects]
 
@@ -196,6 +200,8 @@ def run_benchmark(
 
     Parameters
     ----------
+    profile_name : str
+        name of AWS profile to assume role of
     local_path : str
         path to check size of
     bucket : str
@@ -291,7 +297,7 @@ def main():
         cleanup_remote_files(
             bucket=args.bucket,
             remote_path=args.remote_path,
-            profile=args.profile_name,
+            profile_name=args.profile_name,
         )
 
     outfile = f"s3_upload_benchmark_{now}.tsv"
