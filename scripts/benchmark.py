@@ -80,6 +80,13 @@ def parse_time_output(stderr):
     elapsed_time = [x for x in stderr if x.startswith("Elapsed")][0].split()[
         -1
     ]
+
+    # elapsed time may be hh:mm:ss or mm:ss.ms
+    # trim off milliseconds and prepend 0: if <1 hours for consistency
+    elapsed_time = elapsed_time.split(".")[0]
+    if elapsed_time.count(":") == 1:
+        elapsed_time = f"0:{elapsed_time}"
+
     max_resident = [
         x for x in stderr if x.startswith("Maximum resident set size")
     ][0].split()[-1]
@@ -275,7 +282,7 @@ def main():
             f" {args.bucket} | remote_path: {args.remote_path}"
         ),
         f"# Total files to benchmark with: {run_files} ({run_size})",
-        "cores\tthreads\telapsed time\tmaximum resident set size (mb)",
+        "cores\tthreads\telapsed time (h:m:s)\tmaximum resident set size (mb)",
     ]
 
     for core, thread in cores_to_threads:
