@@ -10,7 +10,10 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from time import gmtime, strftime
+from timeit import default_timer as timer
 from typing import Tuple
+
 
 import boto3
 
@@ -58,43 +61,25 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def parse_time_output(stderr):
+def get_peak_memory_usage() -> str:
     """
-    Parse the required fields from the stderr output of /usr/bin/time.
+    Read memory usage output from memory-profiler to get peak memory usage.
 
-    This contains key metrics such as CPU usage and max resident set
-    size (aka peak memory usage)
-
-    Parameters
-    ----------
-    stderr : list
-        stderr output from running the upload
+    File is formatted with one line per sample containing 'MEM 10.00 1.00',
+    where 10.00 is memory usage at that time point and 1.00 being the time
+    since execution
 
     Returns
     -------
-    str
-        elapsed time (formatted as h:mm:ss or m:ss)
-    int
-        maximum resident set size (in mb)
+    float
+        peak memory usage of the process
     """
-    elapsed_time = [x for x in stderr if x.startswith("Elapsed")][0].split()[
-        -1
-    ]
+    with open("benchmark.out", mode="r") as fh:
+        contents = fh.read().splitlines()
 
-    # elapsed time may be h:m:ss or m:ss.ms, trim off milliseconds and
-    # prefix h and m with 0 for consistency (i.e. as hh:mm:ss)
-    elapsed_time = elapsed_time.split(".")[0]
-    if elapsed_time.count(":") == 1:
-        elapsed_time = f"00:{elapsed_time}"
-    hours, minutes, seconds = elapsed_time.split(":")
-    elapsed_time = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
+    os.remove("benchmark.out")
 
-    max_resident = [
-        x for x in stderr if x.startswith("Maximum resident set size")
-    ][0].split()[-1]
-    max_resident = round(int(max_resident) / 1024, 2)
-
-    return elapsed_time, max_resident
+    return round(max([float(x.split()[1]) for x in contents[1:]]), 2)
 
 
 def cleanup_remote_files(bucket, remote_path, profile_name) -> None:
@@ -111,7 +96,7 @@ def cleanup_remote_files(bucket, remote_path, profile_name) -> None:
     profile_name : str
         name of AWS profile to assume role of
     """
-    print(f"Deleting files from {bucket}:{remote_path}")
+    print(f"Deleting uploaded files from {bucket}:{remote_path}")
     bucket = (
         boto3.Session(profile_name=profile_name).resource("s3").Bucket(bucket)
     )
@@ -173,7 +158,7 @@ def check_local_path_size(local_path) -> str:
     """
     proc = call_command(f"du -sh {local_path}")
 
-    return proc.stdout.decode().split()[0]
+    return f"{proc.stdout.decode().split()[0]}B"
 
 
 def check_total_files(local_path) -> int:
@@ -203,9 +188,8 @@ def run_benchmark(
     the elapsed time and maximum resident set size (i.e. peak memory usage).
 
     We are going to use subprocess.run to call the script instead of
-    directly importing, this is so we can use GNU time to measure the
-    maximum resident set size since memory profiling in Python where
-    child processes are split across cores is a headache.
+    directly importing, this is so we can run memory-profiler to get
+    the maximum memory used across all child processes.
 
     Parameters
     ----------
@@ -234,17 +218,19 @@ def run_benchmark(
     )
 
     command = (
-        f"/usr/bin/time -v python3 {script_path} upload --local_path"
-        f" {local_path} --bucket {bucket} --remote_path {remote_path} --cores"
-        f" {cores} --threads {threads} --skip_check --profile_name"
-        f" {profile_name}"
+        "mprof run --include-children -o benchmark.out python3"
+        f" {script_path} upload --local_path {local_path} --bucket"
+        f" {bucket} --remote_path {remote_path} --cores {cores} --threads"
+        f" {threads} --skip_check --profile_name {profile_name}"
     )
 
     print(f"Calling uploader with:\n\t{command}")
 
+    start = timer()
     proc = call_command(command)
-    stderr = proc.stderr.decode().replace("\t", "").splitlines()
-    elapsed_time, max_resident_set_size = parse_time_output(stderr)
+    end = timer()
+    elapsed_time = strftime("%H:%M:%S", gmtime(end - start))
+    max_resident_set_size = get_peak_memory_usage()
 
     print(f"Uploading completed in {elapsed_time}")
 
@@ -284,7 +270,7 @@ def main():
             f" {args.bucket} | remote_path: {args.remote_path}"
         ),
         f"# Total files to benchmark with: {run_files} ({run_size})",
-        "cores\tthreads\telapsed time (h:m:s)\tmaximum resident set size (mb)",
+        "cores\tthreads\telapsed time (h:m:s)\tmaximum resident set size (MB)",
     ]
 
     for core, thread in cores_to_threads:
