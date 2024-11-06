@@ -66,13 +66,10 @@ def check_buckets_exist(buckets) -> List[dict]:
     valid = []
     invalid = []
 
-    session = boto3.Session()
-    client = session.client("s3")
-
     for bucket in buckets:
         try:
             log.debug("Checking %s exists and accessible", bucket)
-            valid.append(client.head_bucket(Bucket=bucket))
+            valid.append(boto3.client("s3").head_bucket(Bucket=bucket))
         except s3_exceptions.ClientError:
             invalid.append(bucket)
 
