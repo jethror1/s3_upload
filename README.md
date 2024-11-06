@@ -111,12 +111,12 @@ The below benchmarks were output from running the script with the following argu
 
 These benchmarks were obtained from uploading a NovaSeq S1 flowcell sequencing run compromising of 102GB of data in 5492 files. Uploading was done on a virtual server with a 4 core Intel(R) Xeon(R) Gold 6348 CPU @ 2.60GHz vCPU, 16GB RAM and 10Gbit/s network bandwidth. Uploading will be highly dependent on network bandwidth availability, local storage speed, available compute resources etc. Upload time *should* scale approximately linearly with the total files / size of run. YMMV.
 
-| cores | threads | elapsed time | maximum resident set size (mb) |
-|-------|---------|--------------|--------------------------------|
-| 4     | 1       | 19:02.90     | 77.703125                      |
-| 4     | 2       | 11:19.12     | 80.70703125                    |
-| 4     | 4       | 9:23.50      | 85.69921875                    |
-| 4     | 8       | 9:20.28      | 96.0                           |
+| cores | threads | elapsed time (h:m:s) | maximum resident set size (mb) |
+|-------|---------|----------------------|--------------------------------|
+| 4     | 1       | 0:19:02              | 77.70                          |
+| 4     | 2       | 0:11:19              | 80.71                          |
+| 4     | 4       | 0:9:23               | 85.69                          |
+| 4     | 8       | 0:9:20               | 96.0                           |
 
 ## Docker
 A Dockerfile is provided for running the upload from within a Docker container. For convenience, the tool is aliased to the command `s3_upload` in the container.
