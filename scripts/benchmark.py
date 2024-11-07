@@ -146,7 +146,7 @@ def call_command(command) -> subprocess.CompletedProcess:
 
     # running with memory-profile swallows the return code and always exits
     # with zero, therefore check if an error was raised from stderr
-    if proc.returncode != 0 or "Error" in stderr.splitlines()[1]:
+    if proc.returncode != 0 or "Error" in stderr:
         print(f"Error in calling {command}")
         print(stdout)
         print(stderr)
