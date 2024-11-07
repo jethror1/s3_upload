@@ -74,6 +74,7 @@ class TestSetFileHandler(unittest.TestCase):
 
     def test_setting_file_twice_returns_the_handler(self):
         log.set_file_handler(self.logger, Path(__file__).parent)
+        log.set_file_handler(self.logger, Path(__file__).parent)
 
         expected_message = (
             "INFO: Log file handler already set to"
