@@ -339,7 +339,7 @@ def main():
             f"{compute[0]}\t{compute[1]}\t{elapsed_time}\t{max_set_size}"
         )
 
-    outfile = f"s3_upload_benchmark_{now}.tsv"
+    outfile = f"s3_upload_benchmark_{now.replace(":", "_")}.tsv"
 
     with open(outfile, mode="w", encoding="utf8") as fh:
         fh.write("\n".join(benchmarks + ["\n"]))
