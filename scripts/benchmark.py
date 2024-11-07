@@ -195,7 +195,7 @@ def check_total_files(local_path) -> int:
 
 def run_benchmark(
     local_path, bucket, remote_path, cores, threads
-) -> Tuple[str, int]:
+) -> Tuple[int, int]:
     """
     Call the s3_upload script with the given parameters and capture both
     the elapsed time and maximum resident set size (i.e. peak memory usage).
@@ -290,6 +290,8 @@ def main():
 
     while args.repeats > benchmarks_run:
         benchmarks_run += 1
+        repeat_start = timer()
+
         print(f"\nRunning benchmarking repeat {benchmarks_run}/{args.repeats}")
 
         for core, thread in cores_to_threads:
@@ -314,6 +316,12 @@ def main():
                 bucket=args.bucket,
                 remote_path=args.remote_path,
             )
+
+        repeat_end = timer()
+        print(
+            f"Completed benchmarking repeat {benchmarks_run}/{args.repeats} in"
+            f" {strftime('%H:%M:%S', gmtime(repeat_end - repeat_start))}"
+        )
 
     for compute, metrics in total_metrics.items():
         elapsed_time = strftime(
