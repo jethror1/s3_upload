@@ -1,9 +1,4 @@
-from concurrent.futures import (
-    Future,
-    ProcessPoolExecutor,
-    ThreadPoolExecutor,
-    as_completed,
-)
+from concurrent.futures import Future
 import re
 import unittest
 from unittest.mock import ANY, call, patch
