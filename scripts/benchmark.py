@@ -5,9 +5,11 @@ optimal to set for uploading
 """
 
 import argparse
+from collections import defaultdict
 from datetime import datetime
 import os
 from pathlib import Path
+from statistics import mean
 import subprocess
 import sys
 from time import gmtime, strftime
@@ -29,6 +31,16 @@ def parse_args() -> argparse.Namespace:
         Namespace object of parsed cmd line arguments
     """
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=1,
+        help=(
+            "number of times to run the upload for the given core/thread pair,"
+            " if greater than one then the mean elapsed time and max resident"
+            " set size will be calculated from all uploads"
+        ),
+    )
     parser.add_argument(
         "--local_path",
         required=True,
@@ -95,6 +107,7 @@ def cleanup_remote_files(bucket, remote_path) -> None:
         .resource("s3")
         .Bucket(bucket)
     )
+
     objects = bucket.objects.filter(Prefix=remote_path)
     objects = [{"Key": obj.key} for obj in objects]
 
@@ -201,8 +214,8 @@ def run_benchmark(
 
     Returns
     -------
-    str
-        elapsed time (formatted as h:mm:ss or m:ss)
+    int
+        elapsed time in seconds
     int
         maximum resident set size (in mb)
     """
@@ -222,10 +235,10 @@ def run_benchmark(
     start = timer()
     proc = call_command(command)
     end = timer()
-    elapsed_time = strftime("%H:%M:%S", gmtime(end - start))
+    elapsed_time = round(end - start, 2)
     max_resident_set_size = get_peak_memory_usage()
 
-    print(f"Uploading completed in {elapsed_time}")
+    print(f"Uploading completed in {elapsed_time}s")
 
     return elapsed_time, max_resident_set_size
 
@@ -260,31 +273,51 @@ def main():
         (
             f"# Provided arguments - cores: {args.cores} | threads:"
             f" {args.threads} | local_path: {args.local_path} | bucket:"
-            f" {args.bucket} | remote_path: {args.remote_path}"
+            f" {args.bucket} | remote_path: {args.remote_path} | repeats:"
+            f" {args.repeats}"
         ),
         f"# Total files to benchmark with: {run_files} ({run_size})",
         "cores\tthreads\telapsed time (h:m:s)\tmaximum resident set size (MB)",
     ]
 
-    for core, thread in cores_to_threads:
-        print(
-            f"\nBeginning benchmarking with {core} cores and {thread} threads"
-            f" at {datetime.now().strftime('%d-%m-%y %H:%M')}"
+    total_metrics = defaultdict(lambda: defaultdict(list))
+    benchmarks_run = 0
+
+    while args.repeats > benchmarks_run:
+        benchmarks_run += 1
+        print(f"\nRunning benchmarking repeat {benchmarks_run}/{args.repeats}")
+
+        for core, thread in cores_to_threads:
+            print(
+                f"\nBeginning benchmarking with {core} cores and"
+                f" {thread} threads at"
+                f" {datetime.now().strftime('%d-%m-%y %H:%M')}"
+            )
+
+            elapsed_time, max_set_size = run_benchmark(
+                local_path=args.local_path,
+                bucket=args.bucket,
+                remote_path=args.remote_path,
+                cores=core,
+                threads=thread,
+            )
+
+            total_metrics[(core, thread)]["elapsed_time"].append(elapsed_time)
+            total_metrics[(core, thread)]["max_set_size"].append(max_set_size)
+
+            cleanup_remote_files(
+                bucket=args.bucket,
+                remote_path=args.remote_path,
+            )
+
+    for compute, metrics in total_metrics.items():
+        elapsed_time = strftime(
+            "%H:%M:%S", gmtime(round(mean(metrics["elapsed_time"])))
         )
+        max_set_size = round(mean(metrics["max_set_size"]), 2)
 
-        elapsed_time, max_set_size = run_benchmark(
-            local_path=args.local_path,
-            bucket=args.bucket,
-            remote_path=args.remote_path,
-            cores=core,
-            threads=thread,
-        )
-
-        benchmarks.append(f"{core}\t{thread}\t{elapsed_time}\t{max_set_size}")
-
-        cleanup_remote_files(
-            bucket=args.bucket,
-            remote_path=args.remote_path,
+        benchmarks.append(
+            f"{compute[0]}\t{compute[1]}\t{elapsed_time}\t{max_set_size}"
         )
 
     outfile = f"s3_upload_benchmark_{now}.tsv"
