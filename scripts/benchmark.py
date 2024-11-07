@@ -81,12 +81,18 @@ def get_peak_memory_usage() -> str:
     float
         peak memory usage of the process
     """
-    with open("benchmark.out", mode="r") as fh:
+    with open("benchmark.out", mode="r", encoding="utf8") as fh:
         contents = fh.read().splitlines()
+        print(f"Parsed {len(contents)} lines from benchmark output")
 
-    os.remove("benchmark.out")
+    # os.remove("benchmark.out")
 
-    return round(max([float(x.split()[1]) for x in contents[1:]]), 2)
+    try:
+        return round(max([float(x.split()[1]) for x in contents[1:]]), 2)
+    except Exception as err:
+        print(f"Error in parsing output from memory-profiler:\n{err}")
+        print("Returning zero and continuing")
+        return 0
 
 
 def cleanup_remote_files(bucket, remote_path) -> None:
