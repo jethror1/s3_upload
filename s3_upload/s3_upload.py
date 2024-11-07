@@ -53,7 +53,6 @@ def parse_args() -> argparse.Namespace:
             " completed sequencing runs"
         ),
     )
-
     monitor_parser.add_argument(
         "--config",
         required=True,
@@ -73,7 +72,6 @@ def parse_args() -> argparse.Namespace:
         "upload",
         help="Mode to upload a single directory to given location in S3",
     )
-
     upload_parser.add_argument(
         "--local_path", help="path to directory to upload"
     )
@@ -130,7 +128,7 @@ def upload_single_run(args):
         parsed command line arguments
     """
     check_aws_access()
-    check_buckets_exist([args.bucket])
+    check_buckets_exist(buckets=[args.bucket])
 
     if not args.skip_check:
         log.info(
@@ -190,7 +188,9 @@ def monitor_directories_for_upload(config, dry_run):
     log.info("Beginning monitoring directories for runs to upload")
 
     check_aws_access()
-    check_buckets_exist(set([x["bucket"] for x in config["monitor"]]))
+    check_buckets_exist(
+        buckets=set([x["bucket"] for x in config["monitor"]]),
+    )
 
     cores = config.get("max_cores", cpu_count)
     threads = config.get("max_threads", 4)

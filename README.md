@@ -105,13 +105,18 @@ The expected fields in this log file are:
 
 
 ## Benchmarks
-A small [benchmarking script](https://github.com/eastgenomics/s3_upload/blob/main/scripts/benchmark.py) has been written to be able to repeatedly call the uploader with a set number of cores and threads at once to determine the optimal setting for upload time and available compute. It will iterate through combinations of the provided cores and threads, uploading a given run directory and automatically deleting the uploaded files on completion. Results are then written to a file `s3_upload_benchmark_{datetime}.tsv` in the current directory. This allows for measuring the total upload time and maximum resident set size (i.e. peak memory usage).
+A small [benchmarking script](https://github.com/eastgenomics/s3_upload/blob/main/scripts/benchmark.py) has been written to be able to repeatedly call the uploader with a set number of cores and threads at once to determine the optimal setting for upload time and available compute. It will iterate through combinations of the provided cores and threads, uploading a given run directory and automatically deleting the uploaded files on completion. Results are then written to a file `s3_upload_benchmark_{datetime}.tsv` in the current directory. This allows for measuring the total upload time and maximum resident set size (i.e. peak memory usage). This is using the [memory-profiler](https://pypi.org/project/memory-profiler/) package to measure combined memory usage of all spawned child processes to run the upload.
 
 The below benchmarks were output from running the script with the following arguments: `python3 scripts/benchmark.py --local_path /genetics/A01295b/241023_A01295_0432_BHK3NFDRX5 --cores 1 2 3 4 --threads 1 2 4 8 --bucket s3-upload-benchmarking`.
 
 These benchmarks were obtained from uploading a NovaSeq S1 flowcell sequencing run compromising of 102GB of data in 5492 files. Uploading was done on a virtual server with a 4 core Intel(R) Xeon(R) Gold 6348 CPU @ 2.60GHz vCPU, 16GB RAM and 10Gbit/s network bandwidth. Uploading will be highly dependent on network bandwidth availability, local storage speed, available compute resources etc. Upload time *should* scale approximately linearly with the total files / size of run. YMMV.
 
-**TODO - run the benchmarks and add table here**
+| cores | threads | elapsed time (h:m:s) | maximum resident set size (mb) |
+|-------|---------|----------------------|--------------------------------|
+| 4     | 1       | 0:19:02              | 77.70                          |
+| 4     | 2       | 0:11:19              | 80.71                          |
+| 4     | 4       | 0:9:23               | 85.69                          |
+| 4     | 8       | 0:9:20               | 96.0                           |
 
 ## Docker
 A Dockerfile is provided for running the upload from within a Docker container. For convenience, the tool is aliased to the command `s3_upload` in the container.

@@ -5,14 +5,20 @@ optimal to set for uploading
 """
 
 import argparse
+from collections import defaultdict
 from datetime import datetime
 import os
 from pathlib import Path
+from statistics import mean
 import subprocess
 import sys
+from time import gmtime, strftime
+from timeit import default_timer as timer
 from typing import Tuple
 
 import boto3
+
+AWS_DEFAULT_PROFILE = os.environ.get("AWS_DEFAULT_PROFILE")
 
 
 def parse_args() -> argparse.Namespace:
@@ -25,6 +31,16 @@ def parse_args() -> argparse.Namespace:
         Namespace object of parsed cmd line arguments
     """
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=1,
+        help=(
+            "number of times to run the upload for the given core/thread pair,"
+            " if greater than one then the mean elapsed time and max resident"
+            " set size will be calculated from all uploads"
+        ),
+    )
     parser.add_argument(
         "--local_path",
         required=True,
@@ -52,33 +68,30 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def parse_time_output(stderr):
+def get_peak_memory_usage() -> str:
     """
-    Parse the required fields from the stderr output of /usr/bin/time.
+    Read memory usage output from memory-profiler to get peak memory usage.
 
-    This contains key metrics such as CPU usage and max resident set
-    size (aka peak memory usage)
-
-    Parameters
-    ----------
-    stderr : list
-        stderr output from running the upload
+    File is formatted with one line per sample containing 'MEM 10.00 1.00',
+    where 10.00 is memory usage at that time point and 1.00 being the time
+    since execution
 
     Returns
     -------
-    str
-        elapsed time (formatted as h:mm:ss or m:ss)
-    int
-        maximum resident set size (in kb)
+    float
+        peak memory usage of the process
     """
-    elapsed_time = [x for x in stderr if x.startswith("Elapsed")][0].split()[
-        -1
-    ]
-    max_resident = [
-        x for x in stderr if x.startswith("Maximum resident set size")
-    ][0].split()[-1]
+    with open("benchmark.out", mode="r", encoding="utf8") as fh:
+        contents = fh.read().splitlines()
 
-    return elapsed_time, max_resident
+    os.remove("benchmark.out")
+
+    try:
+        return round(max([float(x.split()[1]) for x in contents[1:]]), 2)
+    except Exception as err:
+        print(f"Error in parsing output from memory-profiler:\n{err}")
+        print("Returning zero and continuing")
+        return 0
 
 
 def cleanup_remote_files(bucket, remote_path) -> None:
@@ -93,8 +106,13 @@ def cleanup_remote_files(bucket, remote_path) -> None:
     remote_path : str
         path where files were uploaded to
     """
-    print(f"Deleting files from {bucket}:{remote_path}")
-    bucket = boto3.resource("s3").Bucket(bucket)
+    print(f"Deleting uploaded files from {bucket}:{remote_path}")
+    bucket = (
+        boto3.Session(profile_name=AWS_DEFAULT_PROFILE)
+        .resource("s3")
+        .Bucket(bucket)
+    )
+
     objects = bucket.objects.filter(Prefix=remote_path)
     objects = [{"Key": obj.key} for obj in objects]
 
@@ -124,11 +142,19 @@ def call_command(command) -> subprocess.CompletedProcess:
     SystemExit
         Raised when provided command does not return a zero exit code
     """
-    proc = subprocess.run(command, shell=True, capture_output=True)
+    proc = subprocess.run(
+        command, shell=True, check=False, capture_output=True
+    )
 
-    if proc.returncode != 0:
+    stdout = proc.stdout.decode()
+    stderr = proc.stderr.decode()
+
+    # running with memory-profile swallows the return code and always exits
+    # with zero, therefore check if an error was raised from stderr
+    if proc.returncode != 0 or "Error" in stderr:
         print(f"Error in calling {command}")
-        print(proc.stderr.decode())
+        print(stdout)
+        print(stderr)
         sys.exit(proc.returncode)
 
     return proc
@@ -150,7 +176,7 @@ def check_local_path_size(local_path) -> str:
     """
     proc = call_command(f"du -sh {local_path}")
 
-    return proc.stdout.decode().split()[0]
+    return f"{proc.stdout.decode().split()[0]}B"
 
 
 def check_total_files(local_path) -> int:
@@ -174,15 +200,14 @@ def check_total_files(local_path) -> int:
 
 def run_benchmark(
     local_path, bucket, remote_path, cores, threads
-) -> Tuple[str, int]:
+) -> Tuple[int, int]:
     """
     Call the s3_upload script with the given parameters and capture both
     the elapsed time and maximum resident set size (i.e. peak memory usage).
 
     We are going to use subprocess.run to call the script instead of
-    directly importing, this is so we can use GNU time to measure the
-    maximum resident set size since memory profiling in Python where
-    child processes are split across cores is a headache.
+    directly importing, this is so we can run memory-profiler to get
+    the maximum memory used across all child processes.
 
     Parameters
     ----------
@@ -199,8 +224,8 @@ def run_benchmark(
 
     Returns
     -------
-    str
-        elapsed time (formatted as h:mm:ss or m:ss)
+    int
+        elapsed time in seconds
     int
         maximum resident set size (in mb)
     """
@@ -209,19 +234,22 @@ def run_benchmark(
     )
 
     command = (
-        f"/usr/bin/time -v python3 {script_path} upload --local_path"
-        f" {local_path} --bucket {bucket} --remote_path {remote_path} --cores"
-        f" {cores} --threads {threads} --skip_check"
+        "mprof run --include-children -o benchmark.out python3"
+        f" {script_path} upload --local_path {local_path} --bucket"
+        f" {bucket} --remote_path {remote_path} --cores {cores} --threads"
+        f" {threads} --skip_check"
     )
 
     print(f"Calling uploader with:\n\t{command}")
 
+    start = timer()
     proc = call_command(command)
-    stderr = proc.stderr.decode().replace("\t", "").splitlines()
-    elapsed_time, max_resident_set_size = parse_time_output(stderr)
-    max_resident_set_size = max_resident_set_size / 1024
+    end = timer()
 
-    print(f"Uploading completed in {elapsed_time}")
+    elapsed_time = round(end - start, 2)
+    max_resident_set_size = get_peak_memory_usage()
+
+    print(f"Uploading completed in {elapsed_time}s")
 
     return elapsed_time, max_resident_set_size
 
@@ -256,30 +284,62 @@ def main():
         (
             f"# Provided arguments - cores: {args.cores} | threads:"
             f" {args.threads} | local_path: {args.local_path} | bucket:"
-            f" {args.bucket} | remote_path: {args.remote_path}"
+            f" {args.bucket} | remote_path: {args.remote_path} | repeats:"
+            f" {args.repeats}"
         ),
         f"# Total files to benchmark with: {run_files} ({run_size})",
-        "cores\tthreads\telapsed time\tmaximum resident set size",
+        "cores\tthreads\telapsed time (h:m:s)\tmaximum resident set size (MB)",
     ]
 
-    for core, thread in cores_to_threads:
+    total_metrics = defaultdict(lambda: defaultdict(list))
+    benchmarks_run = 0
+
+    while args.repeats > benchmarks_run:
+        benchmarks_run += 1
+        repeat_start = timer()
+
+        print(f"\nRunning benchmarking repeat {benchmarks_run}/{args.repeats}")
+
+        for core, thread in cores_to_threads:
+            print(
+                f"\nBeginning benchmarking with {core} cores and"
+                f" {thread} threads at"
+                f" {datetime.now().strftime('%d-%m-%y %H:%M')}"
+            )
+
+            elapsed_time, max_set_size = run_benchmark(
+                local_path=args.local_path,
+                bucket=args.bucket,
+                remote_path=args.remote_path,
+                cores=core,
+                threads=thread,
+            )
+
+            total_metrics[(core, thread)]["elapsed_time"].append(elapsed_time)
+            total_metrics[(core, thread)]["max_set_size"].append(max_set_size)
+
+            cleanup_remote_files(
+                bucket=args.bucket,
+                remote_path=args.remote_path,
+            )
+
+        repeat_end = timer()
         print(
-            f"\nBeginning benchmarking with {core} cores and {thread} threads"
+            f"Completed benchmarking repeat {benchmarks_run}/{args.repeats} in"
+            f" {strftime('%H:%M:%S', gmtime(repeat_end - repeat_start))}"
         )
 
-        elapsed_time, max_set_size = run_benchmark(
-            local_path=args.local_path,
-            bucket=args.bucket,
-            remote_path=args.remote_path,
-            cores=core,
-            threads=thread,
+    for compute, metrics in total_metrics.items():
+        elapsed_time = strftime(
+            "%H:%M:%S", gmtime(round(mean(metrics["elapsed_time"])))
+        )
+        max_set_size = round(mean(metrics["max_set_size"]), 2)
+
+        benchmarks.append(
+            f"{compute[0]}\t{compute[1]}\t{elapsed_time}\t{max_set_size}"
         )
 
-        benchmarks.append(f"{core}\t{thread}\t{elapsed_time}\t{max_set_size}")
-
-        cleanup_remote_files(bucket=args.bucket, remote_path=args.remote_path)
-
-    outfile = f"s3_upload_benchmark_{now}.tsv"
+    outfile = f"s3_upload_benchmark_{now.replace(':', '_')}.tsv"
 
     with open(outfile, mode="w", encoding="utf8") as fh:
         fh.write("\n".join(benchmarks + ["\n"]))
