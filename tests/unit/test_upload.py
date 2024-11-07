@@ -43,7 +43,7 @@ class TestCheckAwsAccess(unittest.TestCase):
             upload.check_aws_access()
 
 
-@patch("s3_upload.utils.upload.boto3.client")
+@patch("s3_upload.utils.upload.boto3.Session.client")
 class TestCheckBucketsExist(unittest.TestCase):
     def test_bucket_metadata_returned_when_bucket_exists(self, mock_client):
         valid_bucket_metadata = {
@@ -70,7 +70,7 @@ class TestCheckBucketsExist(unittest.TestCase):
             valid_bucket_metadata
         )
 
-        bucket_details = upload.check_buckets_exist(["jethro-s3-test-v2"])
+        bucket_details = upload.check_buckets_exist(["my-bucket"])
 
         self.assertEqual(bucket_details, [valid_bucket_metadata])
 
