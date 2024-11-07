@@ -83,9 +83,8 @@ def get_peak_memory_usage() -> str:
     """
     with open("benchmark.out", mode="r", encoding="utf8") as fh:
         contents = fh.read().splitlines()
-        print(f"Parsed {len(contents)} lines from benchmark output")
 
-    # os.remove("benchmark.out")
+    os.remove("benchmark.out")
 
     try:
         return round(max([float(x.split()[1]) for x in contents[1:]]), 2)
@@ -246,6 +245,7 @@ def run_benchmark(
     start = timer()
     proc = call_command(command)
     end = timer()
+
     elapsed_time = round(end - start, 2)
     max_resident_set_size = get_peak_memory_usage()
 
