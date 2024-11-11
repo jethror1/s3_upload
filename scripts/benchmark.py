@@ -84,10 +84,13 @@ def get_peak_memory_usage() -> str:
     with open("benchmark.out", mode="r", encoding="utf8") as fh:
         contents = fh.read().splitlines()
 
+        # only keep the profile lines
+        contents = [x for x in contents if x.startswith("MEM")]
+
     os.remove("benchmark.out")
 
     try:
-        return round(max([float(x.split()[1]) for x in contents[1:]]), 2)
+        return round(max([float(x.split()[1]) for x in contents]), 2)
     except Exception as err:
         print(f"Error in parsing output from memory-profiler:\n{err}")
         print("Returning zero and continuing")
