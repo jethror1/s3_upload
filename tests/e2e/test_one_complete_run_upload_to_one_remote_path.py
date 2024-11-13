@@ -16,9 +16,7 @@ from unittest.mock import patch
 import os
 import shutil
 
-import boto3
-
-from e2e import BASE_CONFIG, S3_BUCKET, TEST_DATA_DIR
+from e2e import BASE_CONFIG, S3_BUCKET, S3_SESSION, TEST_DATA_DIR
 from e2e.helper import (
     cleanup_local_test_files,
     cleanup_remote_files,
@@ -129,7 +127,7 @@ class TestSingleCompleteRun(unittest.TestCase):
             [os.path.join(self.remote_path, "run_1", f) for f in local_files]
         )
 
-        bucket = boto3.resource("s3").Bucket(S3_BUCKET)
+        bucket = S3_SESSION.resource("s3").Bucket(S3_BUCKET)
         uploaded_objects = bucket.objects.filter(Prefix=self.remote_path)
         uploaded_files = sorted([x.key for x in uploaded_objects])
 

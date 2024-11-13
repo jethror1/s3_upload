@@ -20,9 +20,8 @@ from unittest.mock import patch
 import os
 import shutil
 
-import boto3
 
-from e2e import BASE_CONFIG, S3_BUCKET, TEST_DATA_DIR
+from e2e import BASE_CONFIG, S3_BUCKET, S3_SESSION, TEST_DATA_DIR
 from e2e.helper import (
     cleanup_local_test_files,
     cleanup_remote_files,
@@ -158,7 +157,7 @@ class TestConfigRegexPatternsAgainstSampleNames(unittest.TestCase):
             [os.path.join(self.parent_remote_path, f) for f in local_files]
         )
 
-        bucket = boto3.resource("s3").Bucket(S3_BUCKET)
+        bucket = S3_SESSION.resource("s3").Bucket(S3_BUCKET)
         uploaded_objects = bucket.objects.filter(
             Prefix=self.parent_remote_path
         )

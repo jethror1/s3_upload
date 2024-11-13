@@ -10,7 +10,13 @@ import shutil
 
 import boto3
 
-from e2e import S3_BUCKET, TEST_DATA_DIR
+from e2e import (
+    AWS_ACCESS_KEY,
+    AWS_SECRET_KEY,
+    AWS_DEFAULT_PROFILE,
+    S3_BUCKET,
+    TEST_DATA_DIR,
+)
 
 
 def create_files(run_dir, *files):
@@ -64,7 +70,17 @@ def cleanup_remote_files(remote_path) -> None:
     remote_path : str
         path where files were uploaded to
     """
-    bucket = boto3.resource("s3").Bucket(S3_BUCKET)
+    print(f"Deleting uploaded files from {S3_BUCKET}:{remote_path}")
+    bucket = (
+        boto3.Session(
+            aws_access_key_id=AWS_ACCESS_KEY,
+            aws_secret_access_key=AWS_SECRET_KEY,
+            profile_name=AWS_DEFAULT_PROFILE,
+        )
+        .resource("s3")
+        .Bucket(S3_BUCKET)
+    )
+
     objects = bucket.objects.filter(Prefix=remote_path)
     objects = [{"Key": obj.key} for obj in objects]
 
