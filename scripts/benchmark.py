@@ -19,6 +19,8 @@ from typing import Tuple
 import boto3
 
 AWS_DEFAULT_PROFILE = os.environ.get("AWS_DEFAULT_PROFILE")
+AWS_SECRET_KEY = os.environ.get("AWS_SECRET_KEY")
+AWS_ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY")
 
 
 def parse_args() -> argparse.Namespace:
@@ -111,7 +113,11 @@ def cleanup_remote_files(bucket, remote_path) -> None:
     """
     print(f"Deleting uploaded files from {bucket}:{remote_path}")
     bucket = (
-        boto3.Session(profile_name=AWS_DEFAULT_PROFILE)
+        boto3.Session(
+            aws_access_key_id=AWS_ACCESS_KEY,
+            aws_secret_access_key=AWS_SECRET_KEY,
+            profile_name=AWS_DEFAULT_PROFILE,
+        )
         .resource("s3")
         .Bucket(bucket)
     )
