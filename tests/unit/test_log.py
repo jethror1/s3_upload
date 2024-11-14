@@ -27,13 +27,11 @@ class TestGetConsoleHandler(unittest.TestCase):
 
 
 class TestSetFileHandler(unittest.TestCase):
-    # @classmethod
     def setUp(self):
         self.logger = log.get_logger("s3_upload", log_level=logging.INFO)
         log.set_file_handler(self.logger, Path(__file__).parent)
         self.logger.setLevel(5)
 
-    # @classmethod
     def tearDown(self):
         log_file = os.path.join(Path(__file__).parent, "s3_upload.log")
         if os.path.exists(log_file):
@@ -67,14 +65,8 @@ class TestSetFileHandler(unittest.TestCase):
         """
         self.logger.info("testing")
 
-        print(self.logger.handlers)
-        print(os.path.join(Path(__file__).parent, "s3_upload.log"))
-        # exit(1)
-
         with open(os.path.join(Path(__file__).parent, "s3_upload.log")) as fh:
             log_contents = fh.read()
-
-        print(log_contents)
 
         self.assertIn("INFO: testing", log_contents)
 
@@ -86,9 +78,6 @@ class TestSetFileHandler(unittest.TestCase):
             "INFO: Log file handler already set to"
             f" {os.path.join(Path(__file__).parent, 's3_upload.log')}"
         )
-
-        print(self.logger.handlers)
-        # exit(1)
 
         with open(os.path.join(Path(__file__).parent, "s3_upload.log")) as fh:
             log_contents = fh.read()
