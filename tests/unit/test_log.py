@@ -87,6 +87,9 @@ class TestSetFileHandler(unittest.TestCase):
             f" {os.path.join(Path(__file__).parent, 's3_upload.log')}"
         )
 
+        print(self.logger.handlers)
+        # exit(1)
+
         with open(os.path.join(Path(__file__).parent, "s3_upload.log")) as fh:
             log_contents = fh.read()
 
