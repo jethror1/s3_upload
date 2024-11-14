@@ -28,7 +28,9 @@ class TestGetConsoleHandler(unittest.TestCase):
 
 class TestSetFileHandler(unittest.TestCase):
     def setUp(self):
-        self.logger = log.get_logger("s3_upload", log_level=logging.INFO)
+        self.logger = log.get_logger(
+            f"s3_upload_{uuid4().hex}", log_level=logging.INFO
+        )
         log.set_file_handler(self.logger, Path(__file__).parent)
         self.logger.setLevel(5)
 
