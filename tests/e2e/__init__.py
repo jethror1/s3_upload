@@ -8,15 +8,29 @@ from pathlib import Path
 import sys
 import os
 
+import boto3
+
 sys.path.append(os.path.join(Path(__file__).parent.parent.parent, "s3_upload"))
 
+from s3_upload.utils.upload import check_aws_access
 
+AWS_DEFAULT_PROFILE = os.environ.get("AWS_DEFAULT_PROFILE")
+AWS_SECRET_KEY = os.environ.get("AWS_SECRET_KEY")
+AWS_ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY")
 S3_BUCKET = os.environ.get("E2E_TEST_S3_BUCKET")
 
 if not S3_BUCKET:
     raise AttributeError(
         "Required E2E_TEST_S3_BUCKET not set as environment variable"
     )
+
+check_aws_access()
+
+S3_SESSION = boto3.Session(
+    aws_access_key_id=AWS_ACCESS_KEY,
+    aws_secret_access_key=AWS_SECRET_KEY,
+    profile_name=AWS_DEFAULT_PROFILE,
+)
 
 TEST_DATA_DIR = os.path.join(os.path.dirname(__file__), "test_data")
 

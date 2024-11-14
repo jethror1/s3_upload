@@ -7,6 +7,7 @@ from concurrent.futures import (
 )
 from os import environ, path
 import re
+import sys
 from typing import Dict, List, Tuple
 
 import boto3
@@ -17,6 +18,8 @@ from botocore import exceptions as s3_exceptions
 from .log import get_logger
 
 AWS_DEFAULT_PROFILE = environ.get("AWS_DEFAULT_PROFILE")
+AWS_SECRET_KEY = environ.get("AWS_SECRET_KEY")
+AWS_ACCESS_KEY = environ.get("AWS_ACCESS_KEY")
 
 log = get_logger("s3_upload")
 
@@ -33,12 +36,50 @@ def check_aws_access():
 
     Raises
     ------
-    botocore.exceptions.ClientError
+    SystemExit
+        Raised when mutually exclusive AWS environment variables provided
+    SystemExit
+        Raised when required environment variables not defined
+    RuntimeError
         Raised when unable to connect to AWS
     """
     log.info("Checking access to AWS")
+
+    if AWS_DEFAULT_PROFILE and (AWS_ACCESS_KEY or AWS_SECRET_KEY):
+        log.error(
+            "Both AWS_DEFAULT_PROFILE provided as well as AWS_ACCESS_KEY and /"
+            " or AWS_SECRET_KEY. Only one authentication method may be used."
+        )
+        sys.exit(
+            "Invalid environment variables for authentication method specified"
+        )
+
+    if AWS_DEFAULT_PROFILE:
+        log.info(
+            "Environment variable AWS_DEFAULT_PROFILE defined, will be used"
+            " for authentication"
+        )
+    elif AWS_ACCESS_KEY and AWS_SECRET_KEY:
+        log.info(
+            "Environment variables AWS_ACCESS_KEY and AWS_SECRET_KEY defined,"
+            " will be used for authentication"
+        )
+    else:
+        log.error(
+            "Required environment variables for AWS authentication not defined"
+        )
+        sys.exit("AWS authentication credentials not provided")
+
     try:
-        return list(boto3.Session().resource("s3").buckets.all())
+        return list(
+            boto3.Session(
+                aws_access_key_id=AWS_ACCESS_KEY,
+                aws_secret_access_key=AWS_SECRET_KEY,
+                profile_name=AWS_DEFAULT_PROFILE,
+            )
+            .resource("s3")
+            .buckets.all()
+        )
     except s3_exceptions.ClientError as err:
         raise RuntimeError(f"Error in connecting to AWS: {err}") from err
 
@@ -71,7 +112,11 @@ def check_buckets_exist(buckets) -> List[dict]:
         try:
             log.debug("Checking %s exists and accessible", bucket)
             valid.append(
-                boto3.Session(profile_name=AWS_DEFAULT_PROFILE)
+                boto3.Session(
+                    aws_access_key_id=AWS_ACCESS_KEY,
+                    aws_secret_access_key=AWS_SECRET_KEY,
+                    profile_name=AWS_DEFAULT_PROFILE,
+                )
                 .client("s3")
                 .head_bucket(Bucket=bucket)
             )
@@ -222,7 +267,11 @@ def multi_thread_upload(
     """
     log.info("Uploading %s files with %s threads", len(files), threads)
 
-    session = boto3.session.Session(profile_name=AWS_DEFAULT_PROFILE)
+    session = boto3.session.Session(
+        aws_access_key_id=AWS_ACCESS_KEY,
+        aws_secret_access_key=AWS_SECRET_KEY,
+        profile_name=AWS_DEFAULT_PROFILE,
+    )
     s3_client = session.client(
         "s3",
         config=Config(

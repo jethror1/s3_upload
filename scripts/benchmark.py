@@ -19,6 +19,8 @@ from typing import Tuple
 import boto3
 
 AWS_DEFAULT_PROFILE = os.environ.get("AWS_DEFAULT_PROFILE")
+AWS_SECRET_KEY = os.environ.get("AWS_SECRET_KEY")
+AWS_ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY")
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,10 +86,13 @@ def get_peak_memory_usage() -> str:
     with open("benchmark.out", mode="r", encoding="utf8") as fh:
         contents = fh.read().splitlines()
 
+        # only keep the profile lines
+        contents = [x for x in contents if x.startswith("MEM")]
+
     os.remove("benchmark.out")
 
     try:
-        return round(max([float(x.split()[1]) for x in contents[1:]]), 2)
+        return round(max([float(x.split()[1]) for x in contents]), 2)
     except Exception as err:
         print(f"Error in parsing output from memory-profiler:\n{err}")
         print("Returning zero and continuing")
@@ -108,7 +113,11 @@ def cleanup_remote_files(bucket, remote_path) -> None:
     """
     print(f"Deleting uploaded files from {bucket}:{remote_path}")
     bucket = (
-        boto3.Session(profile_name=AWS_DEFAULT_PROFILE)
+        boto3.Session(
+            aws_access_key_id=AWS_ACCESS_KEY,
+            aws_secret_access_key=AWS_SECRET_KEY,
+            profile_name=AWS_DEFAULT_PROFILE,
+        )
         .resource("s3")
         .Bucket(bucket)
     )
