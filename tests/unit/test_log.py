@@ -27,14 +27,14 @@ class TestGetConsoleHandler(unittest.TestCase):
 
 
 class TestSetFileHandler(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.logger = log.get_logger("s3_upload", log_level=logging.INFO)
-        log.set_file_handler(cls.logger, Path(__file__).parent)
-        cls.logger.setLevel(5)
+    # @classmethod
+    def setUp(self):
+        self.logger = log.get_logger("s3_upload", log_level=logging.INFO)
+        log.set_file_handler(self.logger, Path(__file__).parent)
+        self.logger.setLevel(5)
 
-    @classmethod
-    def tearDownClass(cls):
+    # @classmethod
+    def tearDown(self):
         log_file = os.path.join(Path(__file__).parent, "s3_upload.log")
         if os.path.exists(log_file):
             os.remove(log_file)
