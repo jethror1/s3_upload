@@ -12,11 +12,14 @@ from s3_upload.utils import upload
 from unit import TEST_DATA_DIR
 
 
-@patch("s3_upload.utils.upload.boto3.Session.resource")
+@patch("s3_upload.utils.upload.boto3.Session")
 class TestCheckAwsAccess(unittest.TestCase):
+    @patch("s3_upload.utils.upload.AWS_ACCESS_KEY", None)
+    @patch("s3_upload.utils.upload.AWS_SECRET_KEY", None)
+    @patch("s3_upload.utils.upload.AWS_DEFAULT_PROFILE", "baz")
     def test_list_of_buckets_returned_on_aws_being_accessible(self, mock_s3):
 
-        mock_s3.return_value.buckets.all.return_value = [
+        mock_s3.return_value.resource.return_value.buckets.all.return_value = [
             "bucket_1",
             "bucket_2",
         ]
@@ -24,6 +27,9 @@ class TestCheckAwsAccess(unittest.TestCase):
 
         self.assertEqual(returned_buckets, ["bucket_1", "bucket_2"])
 
+    @patch("s3_upload.utils.upload.AWS_ACCESS_KEY", None)
+    @patch("s3_upload.utils.upload.AWS_SECRET_KEY", None)
+    @patch("s3_upload.utils.upload.AWS_DEFAULT_PROFILE", "baz")
     def test_runtime_error_raised_on_not_being_able_to_connect(self, mock_s3):
         mock_s3.side_effect = s3_exceptions.ClientError(
             {"Error": {"Code": 1, "Message": "foo"}}, "bar"
@@ -35,6 +41,26 @@ class TestCheckAwsAccess(unittest.TestCase):
         )
 
         with pytest.raises(RuntimeError, match=expected_error):
+            upload.check_aws_access()
+
+    @patch("s3_upload.utils.upload.AWS_ACCESS_KEY", "foo")
+    @patch("s3_upload.utils.upload.AWS_SECRET_KEY", "bar")
+    @patch("s3_upload.utils.upload.AWS_DEFAULT_PROFILE", "baz")
+    def test_system_exit_raised_when_all_env_variables_set(self, mock_s3):
+        expected_error = (
+            "Invalid environment variables for authentication method specified"
+        )
+
+        with pytest.raises(SystemExit, match=expected_error):
+            upload.check_aws_access()
+
+    @patch("s3_upload.utils.upload.AWS_ACCESS_KEY", None)
+    @patch("s3_upload.utils.upload.AWS_SECRET_KEY", None)
+    @patch("s3_upload.utils.upload.AWS_DEFAULT_PROFILE", None)
+    def test_system_exit_raised_when_no_env_variables_set(self, mock_s3):
+        expected_error = "AWS authentication credentials not provided"
+
+        with pytest.raises(SystemExit, match=expected_error):
             upload.check_aws_access()
 
 

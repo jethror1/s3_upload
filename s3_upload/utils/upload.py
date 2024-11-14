@@ -45,6 +45,15 @@ def check_aws_access():
     """
     log.info("Checking access to AWS")
 
+    if AWS_DEFAULT_PROFILE and (AWS_ACCESS_KEY or AWS_SECRET_KEY):
+        log.error(
+            "Both AWS_DEFAULT_PROFILE provided as well as AWS_ACCESS_KEY and /"
+            " or AWS_SECRET_KEY. Only one authentication method may be used."
+        )
+        sys.exit(
+            "Invalid environment variables for authentication method specified"
+        )
+
     if AWS_DEFAULT_PROFILE:
         log.info(
             "Environment variable AWS_DEFAULT_PROFILE defined, will be used"
@@ -55,12 +64,6 @@ def check_aws_access():
             "Environment variables AWS_ACCESS_KEY and AWS_SECRET_KEY defined,"
             " will be used for authentication"
         )
-    elif AWS_DEFAULT_PROFILE and (AWS_ACCESS_KEY or AWS_SECRET_KEY):
-        log.error(
-            "Both AWS_DEFAULT_PROFILE provided as well as AWS_ACCESS_KEY and /"
-            " or AWS_SECRET_KEY. Only one authentication method may be used."
-        )
-        sys.exit("Invalid authentication method specified")
     else:
         log.error(
             "Required environment variables for AWS authentication not defined"
