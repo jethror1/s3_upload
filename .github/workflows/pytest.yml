@@ -21,3 +21,6 @@ jobs:
         sudo mkdir /var/log/s3_upload
         sudo chmod o+w /var/log/s3_upload
         pytest -v --cov --count 10 --random-order tests/unit/
+    - name: Update Coverage Badge
+      if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      uses: we-cli/coverage-badge-action@main
