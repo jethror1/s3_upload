@@ -1,7 +1,7 @@
 # AWS S3 upload
 
 ![pytest](https://github.com/eastgenomics/s3_upload/actions/workflows/pytest.yml/badge.svg)
-[![cov](https://jethror1.github.io/s3_upload/badges/coverage.svg)](https://github.com/<you>/<repo>/actions)
+[![cov](https://jethror1.github.io/s3_upload/badges/coverage.svg)](https://github.com/jethror1/s3_upload/actions)
 
 Uploads Illumina sequencing runs into AWS S3 storage.
 
