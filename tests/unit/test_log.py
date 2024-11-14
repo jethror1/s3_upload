@@ -67,8 +67,14 @@ class TestSetFileHandler(unittest.TestCase):
         """
         self.logger.info("testing")
 
+        print(self.logger.handlers)
+        print(os.path.join(Path(__file__).parent, "s3_upload.log"))
+        # exit(1)
+
         with open(os.path.join(Path(__file__).parent, "s3_upload.log")) as fh:
             log_contents = fh.read()
+
+        print(log_contents)
 
         self.assertIn("INFO: testing", log_contents)
 
