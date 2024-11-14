@@ -71,18 +71,14 @@ class TestSetFileHandler(unittest.TestCase):
         self.assertIn("INFO: testing", log_contents)
 
     def test_setting_file_twice_returns_the_handler(self):
-        log.set_file_handler(self.logger, Path(__file__).parent)
-        log.set_file_handler(self.logger, Path(__file__).parent)
 
-        expected_message = (
-            "INFO: Log file handler already set to"
-            f" {os.path.join(Path(__file__).parent, 's3_upload.log')}"
-        )
+        with patch(
+            "s3_upload.utils.log.check_write_permission_to_log_dir"
+        ) as mock_check:
+            # test we hit the early return and don't continue through the function
+            log.set_file_handler(self.logger, Path(__file__).parent)
 
-        with open(os.path.join(Path(__file__).parent, "s3_upload.log")) as fh:
-            log_contents = fh.read()
-
-        self.assertIn(expected_message, log_contents)
+            self.assertEqual(mock_check.call_count, 0)
 
 
 class TestCheckWritePermissionToLogDir(unittest.TestCase):
