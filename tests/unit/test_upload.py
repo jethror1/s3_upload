@@ -69,12 +69,12 @@ class TestCheckBucketsExist(unittest.TestCase):
     def test_bucket_metadata_returned_when_bucket_exists(self, mock_client):
         valid_bucket_metadata = {
             "ResponseMetadata": {
-                "RequestId": "8WQ3PBQNX",
-                "HostId": "1TvQsTG3ZQfoiuJrEFQBXBCMWFIX6DXA=",
+                "RequestId": "",
+                "HostId": "host_1",
                 "HTTPStatusCode": 200,
                 "HTTPHeaders": {
-                    "x-amz-id-2": "Hd4YGwX1TvQsTG3ZQfoiuJrEFQBXBCMWFIX6DXA=",
-                    "x-amz-request-id": "8WQ3PBQN3BX0G",
+                    "x-amz-id-2": "",
+                    "x-amz-request-id": "",
                     "date": "Fri, 04 Oct 2024 13:37:34 GMT",
                     "x-amz-bucket-region": "eu-west-2",
                     "x-amz-access-point-alias": "false",
@@ -180,7 +180,7 @@ class TestUploadSingleFile(unittest.TestCase):
 
     def test_local_file_name_and_object_id_returned(self, mock_client):
         mock_client.return_value.get_object.return_value = {
-            "ETag": "1TvQsTG3ZQfoiuJrEFQBXBCMWFIX6DXA"
+            "ETag": "remote_id"
         }
 
         local_file, remote_id = upload.upload_single_file(
@@ -195,7 +195,7 @@ class TestUploadSingleFile(unittest.TestCase):
             (local_file, remote_id),
             (
                 "/path/to/monitored_dir/run1/Samplesheet.csv",
-                "1TvQsTG3ZQfoiuJrEFQBXBCMWFIX6DXA",
+                "remote_id",
             ),
         )
 
